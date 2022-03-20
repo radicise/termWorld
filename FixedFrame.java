@@ -1,5 +1,5 @@
 package termWorld;
-public class FixedFrame {
+class FixedFrame {
 	int width;
 	int height;
 	byte[] tiles;
