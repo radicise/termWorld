@@ -20,7 +20,7 @@ class Level {
 		this.VID = VID;
 	}
 	byte[] toBytes() {
-		ByteBuffer data = ByteBuffer.allocate(terrain.width * terrain.height + extension).order(ByteOrder.LITTLE_ENDIAN);
+		ByteBuffer data = ByteBuffer.allocate(terrain.width * terrain.height + extension).order(ByteOrder.BIG_ENDIAN);
 		data.putInt(VID);
 		data.putInt(terrain.width);
 		data.putInt(terrain.height);
@@ -41,7 +41,7 @@ class Level {
 		int marker = width * height;
 		Entity[] ent = new Entity[(((((data[12] & 0xff )<< 8) | (data[13] & 0xff) << 8) | (data[14] & 0xff)) << 8) | (data[15] & 0xff)];
 		byte[] tiles = Arrays.copyOfRange(data, 16, marker + 16);
-		ByteBuffer readFrom = ByteBuffer.wrap(Arrays.copyOfRange(data, marker + 16, marker + extension)).order(ByteOrder.LITTLE_ENDIAN);
+		ByteBuffer readFrom = ByteBuffer.wrap(Arrays.copyOfRange(data, marker + 16, marker + extension)).order(ByteOrder.BIG_ENDIAN);
 		long age = readFrom.getLong();
 		int spawnX = readFrom.getInt();
 		int spawnY = readFrom.getInt();
