@@ -16,6 +16,9 @@ class Level {
 	Level(FixedFrame terrain, TreeMap<Long, Integer> entities, Entity[] ent, long age, int VID, int spawnX, int spawnY) {
 		this.terrain = terrain;
 		this.entities = entities;
+        this.age = age;
+        this.spawnX = spawnX;
+        this.spawnY = spawnY;
 		this.ent = ent;
 		this.VID = VID;
 	}
