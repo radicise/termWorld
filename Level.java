@@ -4,7 +4,8 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.TreeMap;
 class Level {
-	static final int extension = 32;
+	static final int extension = 36;
+	static final int bytesPerEntity = 19;
 	Entity[] ent;
 	FixedFrame terrain;
 	TreeMap<Long, Integer> entities;
@@ -22,17 +23,13 @@ class Level {
 		this.ent = ent;
 		this.VID = VID;
 	}
-	byte[] toBytes() {
-		ByteBuffer data = ByteBuffer.allocate(terrain.width * terrain.height + extension).order(ByteOrder.BIG_ENDIAN);
-		data.putInt(VID);
-		data.putInt(terrain.width);
-		data.putInt(terrain.height);
-		data.putInt(ent.length);
-		data.put(terrain.tiles);
-		data.putLong(age);
-		data.putInt(spawnX);
-		data.putInt(spawnY);
-		byte[] result = new byte[terrain.width * terrain.height + extension];
+	synchronized byte[] toBytes() {
+		ByteBuffer data = ByteBuffer.allocate(terrain.width * terrain.height + extension + (entities.size() * bytesPerEntity)).order(ByteOrder.BIG_ENDIAN);
+		data.putInt(VID).putInt(terrain.width).putInt(terrain.height).putInt(ent.length).put(terrain.tiles).putLong(age).putInt(spawnX).putInt(spawnY).putInt(entities.size());
+		entities.forEach((Long L, Integer I) -> {
+			data.put(ent[I].type).putInt(ent[I].x).putInt(ent[I].y).putLong(ent[I].data).putShort(ent[I].health);
+		});
+		byte[] result = new byte[terrain.width * terrain.height + extension + (entities.size() * bytesPerEntity)];
 		data.rewind();
 		data.get(result);
 		return result;
@@ -44,20 +41,46 @@ class Level {
 		int marker = width * height;
 		Entity[] ent = new Entity[(((((data[12] & 0xff )<< 8) | (data[13] & 0xff) << 8) | (data[14] & 0xff)) << 8) | (data[15] & 0xff)];
 		byte[] tiles = Arrays.copyOfRange(data, 16, marker + 16);
-		ByteBuffer readFrom = ByteBuffer.wrap(Arrays.copyOfRange(data, marker + 16, marker + extension)).order(ByteOrder.BIG_ENDIAN);
+		ByteBuffer readFrom = ByteBuffer.wrap(Arrays.copyOfRange(data, marker + 16, data.length)).order(ByteOrder.BIG_ENDIAN);
 		long age = readFrom.getLong();
 		int spawnX = readFrom.getInt();
 		int spawnY = readFrom.getInt();
 		TreeMap<Long, Integer> entities = new TreeMap<Long, Integer>();
-		//fill ent and fill entities
+		int numEntities = readFrom.getInt();
+		byte type;
+		for (int i = 0; i < numEntities; i++) {
+			type = readFrom.get();
+			switch (type) {
+				case(0):
+					ent[i] = new Entity(readFrom.getInt(), readFrom.getInt(), readFrom.getLong(), readFrom.getShort());
+					break;
+				case(1):
+					ent[i] = new Dog(readFrom.getInt(), readFrom.getInt(), readFrom.getLong(), readFrom.getShort());
+					break;
+				case(2):
+					ent[i] = new EntityPlayer(readFrom.getInt(), readFrom.getInt(), readFrom.getLong(), readFrom.getShort());
+					break;
+				default:
+					ent[i] = new Entity(readFrom.getInt(), readFrom.getInt(), readFrom.getLong(), readFrom.getShort());
+			}
+			entities.put((((long) ent[i].x) << 32) | ((long) ent[i].y), i);
+		}
 		return new Level(new FixedFrame(width, height, tiles), entities, ent, age, VID, spawnX, spawnY);
 	}
 	void display() throws Exception {
-		Long nextEntity = entities.firstKey();
-		boolean moreEntities = nextEntity != null;
-		Long lastEntity = entities.lastKey();
-		int o = 0;
+		boolean moreEntities = true;
+		Long nextEntity = null;
+		Long lastEntity = null;
+		if (entities.isEmpty()) {
+			moreEntities = false;
+		}
+		else {
+			nextEntity = entities.firstKey();
+			lastEntity = entities.lastKey();
+		}
+		long o = 0;
 		for (int i = 0; i < terrain.height; i++) {
+			o = i;
 			for (int n = 0; n < terrain.width; n++) {
 				if (moreEntities && (nextEntity == o)) {
 					Text.buffered.write(ent[entities.get(nextEntity)].face);
@@ -69,12 +92,12 @@ class Level {
 				else {
 					Text.buffered.write(Text.tiles[terrain.tiles[i * terrain.width + n]]);
 				}
-				o++;
+				o += 4294967296L;
 			}
 			Text.buffered.write(Text.delimiter);
 		}
 	}
-	int nextSlot() throws Exception {
+	synchronized int nextSlot() throws Exception {
 		synchronized(entPlace) {
 			int start = entPlace;
 			while (ent[entPlace] != null) {
@@ -83,11 +106,11 @@ class Level {
 					entPlace = 0;
 				}
 				if (entPlace == start) {
-					System.out.println("Warning: Could not allocate Entity slot. (Too many Entity objects loaded!)");
+					System.out.println("Warning: Could not allocate Entity slot (Too many Entity objects loaded!)");
 					throw new Exception("could not allocate Entity slot");
 				}
 			}
-			ent[entPlace] = new Entity();
+			ent[entPlace] = new Entity(0, 0, 0L, (short) 0);
 		}
 		return entPlace;
 	}

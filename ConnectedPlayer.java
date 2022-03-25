@@ -8,7 +8,8 @@ class ConnectedPlayer implements Runnable {
 	OutputStream out;
 	InputStream in;
 	Socket socket;
-	int EID;
+	public int EID;
+	public int clientVersion;
 	ConnectedPlayer(Socket socket, int EID) throws Exception {
 		this.socket = socket;
 		this.out = socket.getOutputStream();
@@ -32,8 +33,20 @@ class ConnectedPlayer implements Runnable {
 	public void serve() throws Exception {
 		DataOutputStream dOut = new DataOutputStream(out);
 		dOut.writeInt(Server.version);
-		dOut.flush();
 		DataInputStream dIn = new DataInputStream(in);
-		System.out.println("A client has connected");
+		clientVersion = dIn.readInt();
+		if (clientVersion < Server.version) {
+			System.out.println("A client was kicked for being outdated: " + socket);
+			socket.close();
+			return;
+		}
+		System.out.println("A client has connected: " + socket);
+		{
+			byte[] initial = Server.level.toBytes();
+			dOut.writeInt(initial.length);
+			out.write(initial);
+		}
+		dOut.writeShort(Server.turnInterval);
+		Thread.sleep(1000);
 	}
 }
