@@ -35,9 +35,9 @@ class Level {
 		return result;
 	}
 	static Level fromBytes(byte[] data) {
-		int VID = (((((data[0] & 0xff )<< 8) | (data[1] & 0xff) << 8) | (data[2] & 0xff)) << 8) | (data[3] & 0xff);
-		int width = (((((data[4] & 0xff )<< 8) | (data[5] & 0xff) << 8) | (data[6] & 0xff)) << 8) | (data[7] & 0xff);
-		int height = (((((data[8] & 0xff )<< 8) | (data[9] & 0xff) << 8) | (data[10] & 0xff)) << 8) | (data[11] & 0xff);
+		int VID = (((((data[0] & 0xff) << 8) | (data[1] & 0xff) << 8) | (data[2] & 0xff)) << 8) | (data[3] & 0xff);
+		int width = (((((data[4] & 0xff) << 8) | (data[5] & 0xff) << 8) | (data[6] & 0xff)) << 8) | (data[7] & 0xff);
+		int height = (((((data[8] & 0xff) << 8) | (data[9] & 0xff) << 8) | (data[10] & 0xff)) << 8) | (data[11] & 0xff);
 		int marker = width * height;
 		Entity[] ent = new Entity[(((((data[12] & 0xff )<< 8) | (data[13] & 0xff) << 8) | (data[14] & 0xff)) << 8) | (data[15] & 0xff)];
 		byte[] tiles = Arrays.copyOfRange(data, 16, marker + 16);

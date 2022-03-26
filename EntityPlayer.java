@@ -8,5 +8,4 @@ class EntityPlayer extends Entity {
 		this.data = data;
 		this.health = health;
 	}
-
 }

@@ -8,6 +8,8 @@ class ConnectedPlayer implements Runnable {
 	OutputStream out;
 	InputStream in;
 	Socket socket;
+	public String username;
+	public String UID;
 	public int EID;
 	public int clientVersion;
 	ConnectedPlayer(Socket socket, int EID) throws Exception {
@@ -47,6 +49,8 @@ class ConnectedPlayer implements Runnable {
 			out.write(initial);
 		}
 		dOut.writeShort(Server.turnInterval);
-		Thread.sleep(1000);
+		synchronized (Server.players) {
+			Server.players.add(this);
+		}
 	}
 }
