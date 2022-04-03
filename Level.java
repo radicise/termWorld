@@ -13,6 +13,7 @@ class Level {
 	int VID;
 	int spawnX;
 	int spawnY;
+	static byte[] blankAndInterval = new byte[]{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, -24};
 	Integer entPlace = 0;
 	Level(FixedFrame terrain, TreeMap<Long, Integer> entities, Entity[] ent, long age, int VID, int spawnX, int spawnY) {
 		this.terrain = terrain;
@@ -79,6 +80,7 @@ class Level {
 			lastEntity = entities.lastKey();
 		}
 		long o = 0;
+		Text.buffered.write(Text.delimiter);
 		for (int i = 0; i < terrain.height; i++) {
 			o = i;
 			for (int n = 0; n < terrain.width; n++) {
@@ -96,6 +98,7 @@ class Level {
 			}
 			Text.buffered.write(Text.delimiter);
 		}
+		Text.buffered.write(Text.delimiter);
 	}
 	synchronized int nextSlot() throws Exception {
 		synchronized(entPlace) {

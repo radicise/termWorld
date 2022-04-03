@@ -8,10 +8,12 @@ import java.net.Socket;
 public class Client {
 	public static final byte[] IPv4Host = new byte[]{127, 0, 0, 1};
 	public static int serverVersion;
-	static volatile boolean up;
-	static volatile boolean down;
-	static volatile boolean left;
-	static volatile boolean right;
+	static OutputStream out;
+	static InputStream in;
+	public static volatile boolean up;
+	public static volatile boolean down;
+	public static volatile boolean left;
+	public static volatile boolean right;
 	static void movementCapture() throws Exception {
 		int n = 0;
 		while(true) {
@@ -19,68 +21,102 @@ public class Client {
 			switch (n) {
 				case (119):
 				case (87):
-					up = true;
-					System.out.print('\u2191');
+					if ((!down) && (!up)) {
+						up = true;
+						System.out.print('\u2191');
+						out.write(128);
+					}
 					break;
 				case (115):
 				case (83):
-					down = true;
-					System.out.print('\u2193');
+					if ((!up) && (!down)) {
+						down = true;
+						System.out.print('\u2193');
+						out.write(129);
+					}
 					break;
 				case (97):
 				case (65):
-					left = true;
-					System.out.print('\u2190');
+					if ((!right) && (!left)) {
+						left = true;
+						System.out.print('\u2190');
+						out.write(130);
+					}
 					break;
 				case (100):
 				case (68):
-					right = true;
-					System.out.print('\u2192');
+					if ((!left) && (!right)) {
+						right = true;
+						System.out.print('\u2192');
+						out.write(131);
+					}
 					break;
 			}
 		}
 	}
 	public static void main(String[] arg) throws Exception {
-		Socket socket = new Socket(InetAddress.getByAddress(IPv4Host), Server.port);
-		OutputStream out = socket.getOutputStream();
-		InputStream in = socket.getInputStream();
-		DataOutputStream dOut = new DataOutputStream(out);
+		Socket socket = null;
+		try {
+			socket = new Socket(InetAddress.getByAddress(IPv4Host), Server.port);
+		}
+		catch (Exception E) {
+			System.out.println("Could not connect to server due to an Exception having occurred: " + E);
+			System.exit(7);
+		}
+		in = socket.getInputStream();
 		DataInputStream dIn = new DataInputStream(in);
 		serverVersion = dIn.readInt();
-		
-		dOut.writeInt(Server.version);
-		byte[] levelBytes = new byte[dIn.readInt()];
-		in.read(levelBytes);
-		Level level = Level.fromBytes(levelBytes);
-		level.display();
-		Text.buffered.flush();
-		new Thread(new Runnable() {
+		out = socket.getOutputStream();
+		DataOutputStream dOut = new DataOutputStream(out);
+		dOut.write(new byte[]{Server.version >>> 24, Server.version >>> 16, Server.version >>> 8, Server.version});
+		new Thread() {
 			public void run() {
 				try {
-					//movementCapture();
-				} catch (Exception E) {
+					movementCapture();
+				}
+				catch (Exception E) {
 					System.out.println("An Exception has occurred: " + E);
 					System.exit(4);
 				}
 			}
-		}).run();
+		}.start();
+		byte[] levelBytes = new byte[dIn.readInt()];
+		in.read(levelBytes);
+		Server.level = Level.fromBytes(levelBytes);
+		Server.level.display();
+		Text.buffered.flush();
 		byte b;
 		int i;
 		short turnInterval = dIn.readShort();
+		byte[] mB;
+		long id;
 		while (true) {
 			while ((b = ((byte) in.read())) != 2) {
 				if (b == 1) {
-					i = level.entities.get(dIn.readLong());
+					id = dIn.readLong();
+					i = Server.level.entities.get(id);
 					if ((b & 1) == 1) {
-						level.ent[i].face = dIn.readChar();
+						Server.level.ent[i].face = dIn.readChar();
 					}
-					if ((b & 2) == 2) {
-						level.ent[i].x = dIn.readInt();
-						level.ent[i].y = dIn.readInt();
+					if ((b & 4) == 4) {
+						Server.level.entities.remove(id);
+						Server.level.ent[i].x = dIn.readInt();
+						Server.level.ent[i].y = dIn.readInt();
+						Server.level.entities.put((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y), i);
 					}
 				}
+				else if (b == 3) {
+					mB = new byte[dIn.readInt()];
+					in.read(mB);
+					System.out.println("Disconnected with reason: " + new String(mB, "UTF-8"));
+					System.exit(8);
+				}
 			}
-			level.display();
+			Server.level.display();
+			up = false;
+			left = false;
+			down = false;
+			right = false;
 			Text.buffered.flush();
 		}
 	}
