@@ -24,7 +24,7 @@ public class Client {
 					if ((!down) && (!up)) {
 						up = true;
 						System.out.print('\u2191');
-						out.write(128);
+						out.write(130);
 					}
 					break;
 				case (115):
@@ -32,7 +32,7 @@ public class Client {
 					if ((!up) && (!down)) {
 						down = true;
 						System.out.print('\u2193');
-						out.write(129);
+						out.write(131);
 					}
 					break;
 				case (97):
@@ -40,7 +40,7 @@ public class Client {
 					if ((!right) && (!left)) {
 						left = true;
 						System.out.print('\u2190');
-						out.write(130);
+						out.write(128);
 					}
 					break;
 				case (100):
@@ -48,7 +48,7 @@ public class Client {
 					if ((!left) && (!right)) {
 						right = true;
 						System.out.print('\u2192');
-						out.write(131);
+						out.write(129);
 					}
 					break;
 			}
@@ -90,9 +90,10 @@ public class Client {
 		short turnInterval = dIn.readShort();
 		byte[] mB;
 		long id;
+		//while (turnInterval > -1111) {System.out.println(0xff & in.read());}
 		while (true) {
 			while ((b = ((byte) in.read())) != 2) {
-				if (b == 1) {
+				if ((b & 2) == 0) {
 					id = dIn.readLong();
 					i = Server.level.entities.get(id);
 					if ((b & 1) == 1) {

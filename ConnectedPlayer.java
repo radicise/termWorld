@@ -86,11 +86,10 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		try {
 			while (true) {
 				n = in.read();
-				System.out.println(n);
 				if ((n & 128) == 128) {
 					n &= 3;
 					synchronized (Server.level.ent[EID]) {
-						Server.level.ent[EID].data ^= ((((Server.level.ent[EID].data) & (0x33 >>> (n & 2))) ^ ((n | 2) << (~(n | 0xfffffffd)))) & 0xf);
+						Server.level.ent[EID].data = ((Server.level.ent[EID].data & (~0xf)) ^ ((((Server.level.ent[EID].data) & (0x33 >>> (n & 2))) ^ ((n | 2) << (~(n | 0xfffffffd)))) & 0xf));
 					}
 				}
 			}

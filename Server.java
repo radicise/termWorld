@@ -43,13 +43,14 @@ public class Server {
 				if (Locker.tryLock()) {
 					try {
 						byte[] bA;
-						int n = 0;
+						int n;
 						int i = players.size();
 						ConnectedPlayer CoPl;
 						synchronized (players) {
-							for (Integer value : (level.entities.values())) {
+							for (Integer value : (level.entities.values().toArray(new Integer[0]))) {
 							    bA = level.ent[value].animate();
 							    if (bA.length != 0) {
+							    	n = 0;
 							    	while (n < i) {
 							    		CoPl = players.get(n);
 							    		try {
