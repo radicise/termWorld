@@ -2,10 +2,11 @@ package termWorld;
 /*import java.io.FileOutputStream;
 import java.util.TreeMap;
 */import java.net.ServerSocket;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.locks.ReentrantLock;
@@ -19,6 +20,8 @@ public class Server {
 	public static short turnInterval = 2000;
 	static ArrayList<ConnectedPlayer> players = new ArrayList<ConnectedPlayer>();
 	static Long playerVal = new Long(0L);
+	static ByteBuffer buf = ByteBuffer.allocate(4096).order(ByteOrder.BIG_ENDIAN);
+	static byte[] bufBytes = buf.array();
 	public static void main(String[] arg) throws Exception {
 		/*Entity[] ent = new Entity[1024];
 		ent[0] = new Dog(2, 1, 0L, (short) 10);
@@ -42,35 +45,19 @@ public class Server {
 			public void run() {
 				if (Locker.tryLock()) {
 					try {
-						byte[] bA;
-						int n;
-						int i = players.size();
+						int n = 0;
 						ConnectedPlayer CoPl;
 						synchronized (players) {
 							for (Integer value : (level.entities.values().toArray(new Integer[0]))) {
-							    bA = level.ent[value].animate();
-							    if (bA.length != 0) {
-							    	n = 0;
-							    	while (n < i) {
-							    		CoPl = players.get(n);
-							    		try {
-							    			CoPl.out.write(bA);
-							    		}
-							    		catch (Exception E) {
-							    			CoPl.kick("Serverside Exception: " + E);
-							    			i--;
-							    			continue;
-							    		}
-							    		n++;
-							    	}
-							    }
+							    level.ent[value].animate();
 							}
-							n = 0;
-							i = players.size();
+							buf.put((byte) 2);
+							int pos = buf.position();
+							int i = players.size();
 							while (n < i) {
 					    		CoPl = players.get(n);
 					    		try {
-					    			CoPl.out.write(2);
+					    			CoPl.out.write(bufBytes, 0, pos);
 					    		}
 					    		catch (Exception E) {
 					    			CoPl.kick("Serverside Exception: " + E);
@@ -79,6 +66,7 @@ public class Server {
 					    		}
 					    		n++;
 					    	}
+							buf.rewind();
 						}
 					}
 					catch (Exception E) {

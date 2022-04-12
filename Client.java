@@ -10,6 +10,7 @@ public class Client {
 	public static int serverVersion;
 	static OutputStream out;
 	static InputStream in;
+	static int turnInterval;
 	public static volatile boolean up;
 	public static volatile boolean down;
 	public static volatile boolean left;
@@ -87,7 +88,7 @@ public class Client {
 		Text.buffered.flush();
 		byte b;
 		int i;
-		short turnInterval = dIn.readShort();
+		turnInterval = dIn.readShort();
 		byte[] mB;
 		long id;
 		//while (turnInterval > -1111) {System.out.println(0xff & in.read());}

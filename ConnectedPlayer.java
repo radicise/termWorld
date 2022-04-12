@@ -22,6 +22,9 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		synchronized(Server.playerVal) {
 			SUID = Server.playerVal;
 			Server.playerVal++;
+			if (Server.playerVal == 0) {
+				throw new Exception("Session-unique ID overflow");
+			}
 		}
 	}
 	public boolean equals(ConnectedPlayer to) {

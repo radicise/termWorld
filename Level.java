@@ -79,6 +79,7 @@ class Level {
 			nextEntity = entities.firstKey();
 			lastEntity = entities.lastKey();
 		}
+		System.out.println(nextEntity + ", " + lastEntity);
 		long o = 0;
 		Text.buffered.write(Text.delimiter);
 		for (int i = 0; i < terrain.height; i++) {

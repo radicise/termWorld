@@ -5,6 +5,8 @@ class Dog extends Entity {
 		type = 1;
 		this.x = x;
 		this.y = y;
+		xO = x;
+		yO = y;
 		this.data = data;
 		this.health = health;
 	}
