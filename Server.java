@@ -17,7 +17,7 @@ public class Server {
 	public static int port = defaultPort;
 	public static volatile String levelname = "defaultLevel";
 	public static Level level = null;
-	public static short turnInterval = 2000;
+	public static short turnInterval = 500;
 	static ArrayList<ConnectedPlayer> players = new ArrayList<ConnectedPlayer>();
 	static Long playerVal = new Long(0L);
 	static ByteBuffer buf = ByteBuffer.allocate(4096).order(ByteOrder.BIG_ENDIAN);
