@@ -20,7 +20,7 @@ class Entity {
 		this.data = data;
 		this.health = health;
 	}
-	synchronized void animate() {//removal,,,,health,tp,[res],face
+	void animate() {//removal,,,,health,tp,[res],face
 		face = (face == '\u203c') ? '\u0021' : '\u203c';
 		Server.buf.put((byte) 1).putInt(x).putInt(y).putChar(face);
 	}

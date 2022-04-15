@@ -2,6 +2,7 @@ package termWorld;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
+import java.util.Random;
 import java.util.TreeMap;
 class Level {
 	static final int extension = 36;
@@ -13,7 +14,8 @@ class Level {
 	int VID;
 	int spawnX;
 	int spawnY;
-	static byte[] blankAndInterval = new byte[]{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, -24};
+	TreeMap<Long, Character> dispFaces;
+	static final byte[] blankAndInterval = new byte[]{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, -24};
 	Integer entPlace = 0;
 	Level(FixedFrame terrain, TreeMap<Long, Integer> entities, Entity[] ent, long age, int VID, int spawnX, int spawnY) {
 		this.terrain = terrain;
@@ -23,6 +25,10 @@ class Level {
         this.spawnY = spawnY;
 		this.ent = ent;
 		this.VID = VID;
+		dispFaces = new TreeMap<Long, Character>();
+		entities.forEach((Long L, Integer I) -> {
+			dispFaces.put((L >>> 32) ^ (L << 32), ent[I].face);
+		});
 	}
 	synchronized byte[] toBytes() {
 		ByteBuffer data = ByteBuffer.allocate(terrain.width * terrain.height + extension + (entities.size() * bytesPerEntity)).order(ByteOrder.BIG_ENDIAN);
@@ -72,21 +78,21 @@ class Level {
 		boolean moreEntities = true;
 		Long nextEntity = null;
 		Long lastEntity = null;
-		if (entities.isEmpty()) {
+		if (dispFaces.isEmpty()) {
 			moreEntities = false;
 		}
 		else {
-			nextEntity = entities.firstKey();
-			lastEntity = entities.lastKey();
+			nextEntity = dispFaces.firstKey();
+			lastEntity = dispFaces.lastKey();
 		}
 		long o = 0;
 		Text.buffered.write(Text.delimiter);
 		for (int i = 0; i < terrain.height; i++) {
-			o = i;
+			o = ((long) i) << 32;
 			for (int n = 0; n < terrain.width; n++) {
 				if (moreEntities && (nextEntity == o)) {
-					Text.buffered.write(ent[entities.get(nextEntity)].face);
-					nextEntity = entities.higherKey(nextEntity);
+					Text.buffered.write(dispFaces.get(nextEntity));
+					nextEntity = dispFaces.higherKey(nextEntity);
 					if (o == lastEntity) {
 						moreEntities = false;
 					}
@@ -94,7 +100,7 @@ class Level {
 				else {
 					Text.buffered.write(Text.tiles[terrain.tiles[i * terrain.width + n]]);
 				}
-				o += 4294967296L;
+				o += 1;
 			}
 			Text.buffered.write(Text.delimiter);
 		}
@@ -116,5 +122,39 @@ class Level {
 			ent[entPlace] = new Entity(0, 0, 0L, (short) 0);
 		}
 		return entPlace;
+	}
+	static Level generate(int width, int height, long seed) {
+		Random rand = new Random(seed);
+		byte[] terrain = new byte[width * height];
+		TreeMap<Long, Integer> entities = new TreeMap<Long, Integer>();
+		int entSize = 1024;
+		Entity[] ent = new Entity[entSize];
+		int r;
+		int ePlace = 0;
+		for (int i = 0; i < terrain.length; i++) {
+			r = rand.nextInt();
+			if (r < -((Integer.MAX_VALUE / 2) + 1)) {
+				terrain[i] = 3;
+			}
+			else {
+				switch (r & 15) {
+					case (0):
+					case (1):
+						terrain[i] = 1;
+						break;
+					case (2):
+						terrain[i] = 2;
+						break;
+				}
+				switch ((r >>> 4) & 15) {
+					case (0):
+						ent[ePlace] = new Dog(i % width, i / width, 0L, (short) 10);
+						entities.put((((long) (i % width)) << 32) ^ ((long) (i / width)), ePlace);
+						ePlace++;
+						break;
+				}
+			}
+		}
+		return new Level(new FixedFrame(width, height, terrain), entities, ent, 0L, Server.version, 0, 0);
 	}
 }

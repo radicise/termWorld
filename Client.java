@@ -99,11 +99,14 @@ public class Client {
 					i = Server.level.entities.get(id);
 					if ((b & 1) == 1) {
 						Server.level.ent[i].face = dIn.readChar();
+						Server.level.dispFaces.replace((id >>> 32) ^ (id << 32), Server.level.ent[i].face);
 					}
 					if ((b & 4) == 4) {
 						Server.level.entities.remove(id);
+						Server.level.dispFaces.remove((id >>> 32) ^ (id << 32));
 						Server.level.ent[i].x = dIn.readInt();
 						Server.level.ent[i].y = dIn.readInt();
+						Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) ^ ((long) Server.level.ent[i].x), Server.level.ent[i].face);
 						Server.level.entities.put((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y), i);
 					}
 				}

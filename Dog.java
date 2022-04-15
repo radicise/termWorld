@@ -10,4 +10,7 @@ class Dog extends Entity {
 		this.data = data;
 		this.health = health;
 	}
+	void animate() {
+		moveBy((Math.random() < 0.5) ? (Math.random() < 0.5 ? 1 : -1) : 0, (Math.random() < 0.5) ? (Math.random() < 0.5 ? 1 : -1) : 0, 0);
+	}
 }
