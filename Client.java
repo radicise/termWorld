@@ -5,8 +5,13 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.Arrays;
 public class Client {
-	public static final byte[] IPv4Host = new byte[]{127, 0, 0, 1};
+	public static byte[] IPv4Host = new byte[]{127, 0, 0, 1};
+	public static byte[] authIPv4Host = new byte[]{127, 0, 0, 1};
+	public static int authPort = 15652;
 	public static int serverVersion;
 	static OutputStream out;
 	static InputStream in;
@@ -15,6 +20,9 @@ public class Client {
 	public static volatile boolean down;
 	public static volatile boolean left;
 	public static volatile boolean right;
+	static String username;
+	static byte[] unB = new byte[32];
+	static long UID;
 	static void movementCapture() throws Exception {
 		int n = 0;
 		while(true) {
@@ -66,10 +74,82 @@ public class Client {
 		}
 		in = socket.getInputStream();
 		DataInputStream dIn = new DataInputStream(in);
-		serverVersion = dIn.readInt();
 		out = socket.getOutputStream();
 		DataOutputStream dOut = new DataOutputStream(out);
-		dOut.write(new byte[]{Server.version >>> 24, Server.version >>> 16, Server.version >>> 8, Server.version});
+		{
+			/**/arg[0] = "guest";
+			arg[1] = "password";
+			arg[2] = "5";
+			/**/UID = Long.valueOf(arg[2]);
+			byte[] name = arg[0].getBytes(StandardCharsets.UTF_16BE);
+			if (name.length > 32) {
+				throw new Exception("Username is too long");
+			}
+			Arrays.fill(unB, (byte) 32);
+			System.arraycopy(name, 0, unB, 0, name.length);
+			out.write(unB);
+			byte[] nonce0 = new byte[32];
+			in.read(nonce0);
+			Server.GUSID = dIn.readLong();
+			Socket authSock = null;
+			try {
+				authSock = new Socket(InetAddress.getByAddress(authIPv4Host), authPort);
+			}
+			catch (Exception E) {
+				System.out.println("Could not connect to authentication server due to an Exception having occurred: " + E);
+				System.exit(8);
+			}
+			InputStream an = authSock.getInputStream();
+			OutputStream aut = authSock.getOutputStream();
+			DataOutputStream aOut = new DataOutputStream(aut);
+			aut.write(0x63);
+			aOut.writeLong(UID);
+			if (an.read() == 0x55) {
+				System.out.println("Authentication failure: userID does not exist");
+				System.exit(9);
+			}
+			byte[] nonce1 = new byte[32];
+			an.read(nonce1);
+			aOut.writeLong(Server.GUSID);
+			aut.write(nonce0);
+			byte[] pw = arg[0].getBytes(StandardCharsets.UTF_16BE);
+			byte[] pwB = new byte[32];
+			if (pw.length > 32) {
+				throw new Exception("Password is too long");
+			}
+			Arrays.fill(pwB, (byte) 32);
+			System.arraycopy(pw, 0, pwB, 0, pw.length);
+			Arrays.fill(pw, (byte) 0);
+			byte[] toh = new byte[72];
+			System.arraycopy(pwB, 0, toh, 0, 32);
+			System.arraycopy(nonce1, 0, toh, 32, 32);
+			for (int i = 0; i < 8; i++) {
+				toh[71 - i] = (byte) (UID >>> (i * 8));
+			}
+			MessageDigest shs = MessageDigest.getInstance("SHA-256");
+			aut.write(shs.digest(toh));
+			if (an.read() == 0x55) {
+				System.out.println("Authentication failure: Secret key was not verified");
+				System.exit(10);
+			}
+			if (an.read() == 0x55) {
+				System.out.println("Authentication failure: Target server not registered with authentication server");
+				System.exit(11);
+			}
+			an.read(nonce0);
+			out.write(unB);
+			dOut.writeLong(UID);
+			out.write(nonce0);
+			if (an.read() == 0x55) {
+				System.out.println("Authentication failure: Target server does not approve");
+				System.exit(12);
+			}
+			Arrays.fill(pwB,  (byte) 0);
+		}//Extra scope for security and garbage collection purposes
+		arg[1] = null;
+		username = arg[0];
+		serverVersion = dIn.readInt();
+		dOut.writeInt(Server.version);
 		new Thread() {
 			public void run() {
 				try {

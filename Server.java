@@ -17,11 +17,12 @@ public class Server {
 	public static int port = defaultPort;
 	public static volatile String levelname = "defaultLevel";
 	public static Level level = null;
-	public static short turnInterval = 116;
+	public static short turnInterval = 411;
 	static ArrayList<ConnectedPlayer> players = new ArrayList<ConnectedPlayer>();
 	static Long playerVal = new Long(0L);
 	static ByteBuffer buf = ByteBuffer.allocate(4096).order(ByteOrder.BIG_ENDIAN);
 	static byte[] bufBytes = buf.array();
+	static long GUSID = 1;//Server ID
 	public static void main(String[] arg) throws Exception {
 		/*Entity[] ent = new Entity[1024];
 		ent[0] = new Dog(2, 1, 0L, (short) 10);
@@ -35,12 +36,13 @@ public class Server {
 		System.exit(0);
 		*/try {
 			level = Level.fromBytes(Files.readAllBytes(FileSystems.getDefault().getPath(levelname)));
-			/*level = Level.generate(8, 8, 3827L);
-		*/}
+			/**/level = Level.generate(40, 40, 3827L);
+		/**/}
 		catch (Exception E) {
 			System.out.println("An Exception has occurred: " + E);
 			System.exit(1);
 		}
+		ConnectedPlayer.initRandom();
 		ServerSocket server = new ServerSocket(port);
 		Timer intervallic = new Timer();
 		intervallic.schedule(new TimerTask() {
