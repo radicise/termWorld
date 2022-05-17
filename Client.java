@@ -77,7 +77,8 @@ public class Client {
 		out = socket.getOutputStream();
 		DataOutputStream dOut = new DataOutputStream(out);
 		{
-			/**/arg[0] = "guest";
+			/**/arg = new String[3];
+			arg[0] = "guest";
 			arg[1] = "password";
 			arg[2] = "5";
 			/**/UID = Long.valueOf(arg[2]);
@@ -104,7 +105,7 @@ public class Client {
 			DataOutputStream aOut = new DataOutputStream(aut);
 			aut.write(0x63);
 			aOut.writeLong(UID);
-			if (an.read() == 0x55) {
+			if (an.read() != 0x63) {
 				System.out.println("Authentication failure: userID does not exist");
 				System.exit(9);
 			}
@@ -112,7 +113,7 @@ public class Client {
 			an.read(nonce1);
 			aOut.writeLong(Server.GUSID);
 			aut.write(nonce0);
-			byte[] pw = arg[0].getBytes(StandardCharsets.UTF_16BE);
+			byte[] pw = arg[1].getBytes(StandardCharsets.UTF_16BE);
 			byte[] pwB = new byte[32];
 			if (pw.length > 32) {
 				throw new Exception("Password is too long");
@@ -127,29 +128,33 @@ public class Client {
 				toh[71 - i] = (byte) (UID >>> (i * 8));
 			}
 			MessageDigest shs = MessageDigest.getInstance("SHA-256");
+			for (byte b : toh) {
+				System.out.print(", " + b);
+			}
 			aut.write(shs.digest(toh));
-			if (an.read() == 0x55) {
+			if (an.read() != 0x63) {
 				System.out.println("Authentication failure: Secret key was not verified");
 				System.exit(10);
 			}
-			if (an.read() == 0x55) {
-				System.out.println("Authentication failure: Target server not registered with authentication server");
+			if (an.read() != 0x63) {
+				System.out.println("Authentication failure: Target server not found to be registered with authentication server");
 				System.exit(11);
 			}
 			an.read(nonce0);
 			out.write(unB);
 			dOut.writeLong(UID);
 			out.write(nonce0);
-			if (an.read() == 0x55) {
+			if ((byte) in.read() != 0x63) {
 				System.out.println("Authentication failure: Target server does not approve");
 				System.exit(12);
 			}
-			Arrays.fill(pwB,  (byte) 0);
+			Arrays.fill(pwB, (byte) 0);
+			arg[1] = null;
 		}//Extra scope for security and garbage collection purposes
-		arg[1] = null;
 		username = arg[0];
 		serverVersion = dIn.readInt();
 		dOut.writeInt(Server.version);
+		System.out.println(serverVersion);
 		new Thread() {
 			public void run() {
 				try {
@@ -171,7 +176,6 @@ public class Client {
 		turnInterval = dIn.readShort();
 		byte[] mB;
 		long id;
-		//while (turnInterval > -1111) {System.out.println(0xff & in.read());}
 		while (true) {
 			while ((b = ((byte) in.read())) != 2) {
 				if ((b & 2) == 0) {

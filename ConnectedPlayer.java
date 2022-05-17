@@ -66,30 +66,37 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	void serve() throws Exception {
 		DataOutputStream dOut = new DataOutputStream(out);
 		DataInputStream dIn = new DataInputStream(in);
-		byte[] uname = new byte[32];
-		in.read(uname);
-		byte[] nonce = new byte[32];
-		nonceGen.nextBytes(nonce);
-		out.write(nonce);
-		dOut.writeLong(Server.GUSID);
-		in.read(uname);
-		UID = dIn.readLong();
-		byte[] claim = new byte[32];
-		in.read(claim);
-		byte[] toh = new byte[104];
-		System.arraycopy(uname, 0, toh, 0, 32);
-		System.arraycopy(nonce, 0, toh, 32, 32);
-		System.arraycopy(secret, 0, toh, 64, 32);
-		for (int i = 0; i < 8; i++) {
-			toh[103 - i] = (byte) (UID >>> (i * 8));
+		try {
+			byte[] uname = new byte[32];
+			in.read(uname);
+			byte[] nonce = new byte[32];
+			nonceGen.nextBytes(nonce);
+			out.write(nonce);
+			dOut.writeLong(Server.GUSID);
+			in.read(uname);
+			UID = dIn.readLong();
+			byte[] claim = new byte[32];
+			in.read(claim);
+			byte[] toh = new byte[104];
+			System.arraycopy(uname, 0, toh, 0, 32);
+			System.arraycopy(nonce, 0, toh, 32, 32);
+			System.arraycopy(secret, 0, toh, 64, 32);
+			for (int i = 0; i < 8; i++) {
+				toh[103 - i] = (byte) (UID >>> (i * 8));
+			}
+			MessageDigest shs = MessageDigest.getInstance("SHA-256");
+			nonce = shs.digest(toh);
+			if (!Arrays.equals(nonce, claim)) {
+				out.write(0x55);
+				return;
+			}
+			out.write(0x63);
 		}
-		MessageDigest shs = MessageDigest.getInstance("SHA-256");
-		nonce = shs.digest(toh);
-		if (!Arrays.equals(nonce, claim)) {
-			out.write(0x55);
+		catch (Exception E) {
+			System.out.println("Exception in user authentication: " + E);
+			Server.level.ent[EID] = null;
 			return;
 		}
-		out.write(0x63);
 		dOut.writeInt(Server.version);
 		clientVersion = dIn.readInt();
 		if (Server.level.entities.containsKey((((long) Server.level.spawnX) << 32) | ((long) Server.level.spawnY))) {

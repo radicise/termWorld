@@ -4,11 +4,11 @@ class uAcct {
 	byte[] uname;
 	long UID;
 	static Long nextUID;
-	public boolean equals(uAcct against) {
+	public boolean equals(Object against) {
 		if (against == null) {
 			return false;
 		}
-		return this.UID == against.UID;
+		return this.UID == ((uAcct) against).UID;
 	}
 	uAcct(byte[] pass, String uname) throws Exception {
 		this.pass = pass;

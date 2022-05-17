@@ -11,16 +11,28 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.List;
-public class Auth {
-	static List<uAcct> users;
-	static List<sAcct> servers;
+/*import java.util.ArrayList;
+import java.io.FileOutputStream;
+*/public class Auth {
+	static List<uAcct> users/* = new ArrayList<uAcct>()*/;
+	static List<sAcct> servers/* = new ArrayList<sAcct>()*/;
 	static DataInputStream in;
 	static DataOutputStream out;
 	static final int port = 15652;
 	static private SecureRandom rand;
 	static private byte[] verySecret = new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0};//Arbitrary random value used for seeding of the nonce generator
 	public static void main(String[] args) throws Exception {
-		in = new DataInputStream(new FileInputStream(new File("TWAuth")));
+		/*users.add(new uAcct("password\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020".getBytes("UTF-16BE"), "guest\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020".getBytes("UTF-16BE"), 5));
+		servers.add(new sAcct(new byte[]{127, 0, 0, 1}, "testServer\u2020\u2020\u2020\u2020\u2020\u2020".getBytes("UTF-16BE"), new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0}, 1L));
+		out = new DataOutputStream(new FileOutputStream(new File("TWAuth")));
+		out.writeLong(6);
+		out.writeLong(2);
+		uAcct.toStream(users.toArray(new uAcct[0]));
+		sAcct.toStream(servers.toArray(new sAcct[0]));
+		out.flush();
+		out.close();
+		System.exit(0);
+		*/in = new DataInputStream(new FileInputStream(new File("TWAuth")));
 		uAcct.nextUID = in.readLong();
 		sAcct.nextSID = in.readLong();
 		users = Arrays.asList(uAcct.fromStream());
@@ -77,6 +89,9 @@ public class Auth {
 			toh[71 - i] = (byte) (UID >>> (i * 8));
 		}
 		MessageDigest shs = MessageDigest.getInstance("SHA-256");
+		for (byte b : toh) {
+			System.out.print(", " + b);
+		}
 		nonce = shs.digest(toh);
 		if (!Arrays.equals(uResp, nonce)) {
 			uOut.write(0x55);
@@ -95,7 +110,7 @@ public class Auth {
 			}
 			uOut.write(0x63);
 			smr = servers.get(ind);
-			System.arraycopy(smr.SID, 0, upass, 0, 32);
+			System.arraycopy(smr.secret, 0, upass, 0, 32);
 		}
 		System.arraycopy(upass, 0, toh, 64, 32);
 		for (int i = 0; i < 8; i++) {

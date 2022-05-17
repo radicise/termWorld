@@ -5,11 +5,11 @@ class sAcct {
 	byte[] secret;
 	long SID;
 	static Long nextSID;
-	public boolean equals(sAcct against) {
+	public boolean equals(Object against) {
 		if (against == null) {
 			return false;
 		}
-		return this.SID == against.SID;
+		return this.SID == ((sAcct) against).SID;
 	}
 	sAcct(byte[] ipv4, String sName, byte[] secret) throws Exception {
 		this.ipv4 = ipv4;

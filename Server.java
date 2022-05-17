@@ -50,11 +50,11 @@ public class Server {
 				if (Locker.tryLock()) {
 					try {
 						int n = 0;
+						for (Integer value : (level.entities.values().toArray(new Integer[0]))) {
+						    level.ent[value].animate();
+						}
 						ConnectedPlayer CoPl;
 						synchronized (players) {
-							for (Integer value : (level.entities.values().toArray(new Integer[0]))) {
-							    level.ent[value].animate();
-							}
 							buf.put((byte) 2);
 							int pos = buf.position();
 							int i = players.size();
