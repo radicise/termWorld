@@ -89,9 +89,6 @@ import java.io.FileOutputStream;
 			toh[71 - i] = (byte) (UID >>> (i * 8));
 		}
 		MessageDigest shs = MessageDigest.getInstance("SHA-256");
-		for (byte b : toh) {
-			System.out.print(", " + b);
-		}
 		nonce = shs.digest(toh);
 		if (!Arrays.equals(uResp, nonce)) {
 			uOut.write(0x55);

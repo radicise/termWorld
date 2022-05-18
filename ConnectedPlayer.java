@@ -93,7 +93,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			out.write(0x63);
 		}
 		catch (Exception E) {
-			System.out.println("Exception in user authentication: " + E);
+			System.out.println("A connecting user failed to be authenticated due to an Exception having occurred: " + E);
 			Server.level.ent[EID] = null;
 			return;
 		}

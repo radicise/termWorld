@@ -64,6 +64,7 @@ public class Client {
 		}
 	}
 	public static void main(String[] arg) throws Exception {
+		System.out.println("termWorld v" + Server.versionString);
 		Socket socket = null;
 		try {
 			socket = new Socket(InetAddress.getByAddress(IPv4Host), Server.port);
@@ -77,13 +78,14 @@ public class Client {
 		out = socket.getOutputStream();
 		DataOutputStream dOut = new DataOutputStream(out);
 		{
-			/**/arg = new String[3];
+			/*arg = new String[3];
 			arg[0] = "guest";
 			arg[1] = "password";
 			arg[2] = "5";
-			/**/UID = Long.valueOf(arg[2]);
+			*/UID = Long.valueOf(arg[2]);
 			byte[] name = arg[0].getBytes(StandardCharsets.UTF_16BE);
 			if (name.length > 32) {
+				socket.close();
 				throw new Exception("Username is too long");
 			}
 			Arrays.fill(unB, (byte) 32);
@@ -98,6 +100,8 @@ public class Client {
 			}
 			catch (Exception E) {
 				System.out.println("Could not connect to authentication server due to an Exception having occurred: " + E);
+				authSock.close();
+				socket.close();
 				System.exit(8);
 			}
 			InputStream an = authSock.getInputStream();
@@ -107,6 +111,8 @@ public class Client {
 			aOut.writeLong(UID);
 			if (an.read() != 0x63) {
 				System.out.println("Authentication failure: userID does not exist");
+				authSock.close();
+				socket.close();
 				System.exit(9);
 			}
 			byte[] nonce1 = new byte[32];
@@ -116,6 +122,8 @@ public class Client {
 			byte[] pw = arg[1].getBytes(StandardCharsets.UTF_16BE);
 			byte[] pwB = new byte[32];
 			if (pw.length > 32) {
+				authSock.close();
+				socket.close();
 				throw new Exception("Password is too long");
 			}
 			Arrays.fill(pwB, (byte) 32);
@@ -128,24 +136,27 @@ public class Client {
 				toh[71 - i] = (byte) (UID >>> (i * 8));
 			}
 			MessageDigest shs = MessageDigest.getInstance("SHA-256");
-			for (byte b : toh) {
-				System.out.print(", " + b);
-			}
 			aut.write(shs.digest(toh));
 			if (an.read() != 0x63) {
 				System.out.println("Authentication failure: Secret key was not verified");
+				authSock.close();
+				socket.close();
 				System.exit(10);
 			}
 			if (an.read() != 0x63) {
 				System.out.println("Authentication failure: Target server not found to be registered with authentication server");
+				authSock.close();
+				socket.close();
 				System.exit(11);
 			}
 			an.read(nonce0);
+			authSock.close();
 			out.write(unB);
 			dOut.writeLong(UID);
 			out.write(nonce0);
 			if ((byte) in.read() != 0x63) {
 				System.out.println("Authentication failure: Target server does not approve");
+				socket.close();
 				System.exit(12);
 			}
 			Arrays.fill(pwB, (byte) 0);
@@ -154,7 +165,6 @@ public class Client {
 		username = arg[0];
 		serverVersion = dIn.readInt();
 		dOut.writeInt(Server.version);
-		System.out.println(serverVersion);
 		new Thread() {
 			public void run() {
 				try {
@@ -176,57 +186,66 @@ public class Client {
 		turnInterval = dIn.readShort();
 		byte[] mB;
 		long id;
-		while (true) {
-			while ((b = ((byte) in.read())) != 2) {
-				if ((b & 2) == 0) {
-					id = dIn.readLong();
-					i = Server.level.entities.get(id);
-					if ((b & 1) == 1) {
-						Server.level.ent[i].face = dIn.readChar();
-						Server.level.dispFaces.replace((id >>> 32) ^ (id << 32), Server.level.ent[i].face);
+		try {
+			while (true) {
+				while ((b = ((byte) in.read())) != 2) {
+					if ((b & 2) == 0) {
+						id = dIn.readLong();
+						i = Server.level.entities.get(id);
+						if ((b & 1) == 1) {
+							Server.level.ent[i].face = dIn.readChar();
+							Server.level.dispFaces.replace((id >>> 32) ^ (id << 32), Server.level.ent[i].face);
+						}
+						if ((b & 4) == 4) {
+							Server.level.entities.remove(id);
+							Server.level.dispFaces.remove((id >>> 32) ^ (id << 32));
+							Server.level.ent[i].x = dIn.readInt();
+							Server.level.ent[i].y = dIn.readInt();
+							Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) ^ ((long) Server.level.ent[i].x), Server.level.ent[i].face);
+							Server.level.entities.put((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y), i);
+						}
 					}
-					if ((b & 4) == 4) {
+					else if (b == 3) {
+						mB = new byte[dIn.readInt()];
+						in.read(mB);
+						System.out.println("Disconnected with reason: " + new String(mB, "UTF-8"));
+						System.exit(8);
+					}
+					else if (b == 6) {
+						i = Server.level.nextSlot();
+						switch (in.read()) {//UIL
+							case(0):
+								Server.level.ent[i] = new Entity(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
+								break;
+							case(1):
+								Server.level.ent[i] = new Dog(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
+								break;
+							case(2):
+								Server.level.ent[i] = new EntityPlayer(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
+								break;
+							default:
+								Server.level.ent[i] = new Entity(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
+						}
+						Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) | ((long) Server.level.ent[i].x), Server.level.ent[i].face);
+						Server.level.entities.put((((long) Server.level.ent[i].x) << 32) | ((long) Server.level.ent[i].y), i);
+					}
+					else if (b == 7) {
+						id = dIn.readLong();
+						Server.level.dispFaces.remove((id << 32) ^ (id >>> 32));
 						Server.level.entities.remove(id);
-						Server.level.dispFaces.remove((id >>> 32) ^ (id << 32));
-						Server.level.ent[i].x = dIn.readInt();
-						Server.level.ent[i].y = dIn.readInt();
-						Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) ^ ((long) Server.level.ent[i].x), Server.level.ent[i].face);
-						Server.level.entities.put((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y), i);
 					}
 				}
-				else if (b == 3) {
-					mB = new byte[dIn.readInt()];
-					in.read(mB);
-					System.out.println("Disconnected with reason: " + new String(mB, "UTF-8"));
-					System.exit(8);
-				}
-				else if (b == 6) {
-					i = Server.level.nextSlot();
-					switch (in.read()) {//UIL
-						case(0):
-							Server.level.ent[i] = new Entity(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
-							break;
-						case(1):
-							Server.level.ent[i] = new Dog(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
-							break;
-						case(2):
-							Server.level.ent[i] = new EntityPlayer(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
-							break;
-						default:
-							Server.level.ent[i] = new Entity(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
-					}
-					Server.level.entities.put((((long) Server.level.ent[i].x) << 32) | ((long) Server.level.ent[i].y), i);
-				}
-				else if (b == 7) {
-					Server.level.entities.remove((((long) dIn.readInt()) << 32) | ((long) dIn.readInt()));
-				}
+				Server.level.display();
+				up = false;
+				left = false;
+				down = false;
+				right = false;
+				Text.buffered.flush();
 			}
-			Server.level.display();
-			up = false;
-			left = false;
-			down = false;
-			right = false;
-			Text.buffered.flush();
+		}
+		catch (Exception E) {
+			System.out.println("An Exception has occurred: " + E);
+			System.exit(13);
 		}
 	}
 }
