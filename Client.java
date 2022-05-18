@@ -200,6 +200,26 @@ public class Client {
 					System.out.println("Disconnected with reason: " + new String(mB, "UTF-8"));
 					System.exit(8);
 				}
+				else if (b == 6) {
+					i = Server.level.nextSlot();
+					switch (in.read()) {//UIL
+						case(0):
+							Server.level.ent[i] = new Entity(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
+							break;
+						case(1):
+							Server.level.ent[i] = new Dog(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
+							break;
+						case(2):
+							Server.level.ent[i] = new EntityPlayer(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
+							break;
+						default:
+							Server.level.ent[i] = new Entity(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
+					}
+					Server.level.entities.put((((long) Server.level.ent[i].x) << 32) | ((long) Server.level.ent[i].y), i);
+				}
+				else if (b == 7) {
+					Server.level.entities.remove((((long) dIn.readInt()) << 32) | ((long) dIn.readInt()));
+				}
 			}
 			Server.level.display();
 			up = false;

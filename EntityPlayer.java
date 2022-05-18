@@ -10,7 +10,19 @@ class EntityPlayer extends Entity {
 		this.data = data;
 		this.health = health;
 	}
-	synchronized void animate() {
+	boolean checkDeath(int EID) {
+		if (data < 0) {
+			Server.level.entities.remove((((long) Server.level.ent[EID].x) << 32) | ((long) Server.level.ent[EID].y));
+			Server.level.ent[EID] = null;
+			Server.buf.put((byte) 7).putInt(x).putInt(y);
+			return true;
+		}
+		return false;
+	}
+	synchronized void animate(int EID) {
+		if (checkDeath(EID)) {
+			return;
+		}
 		if (((data & 8) == 8) || ((data & 2) == 2)) {
 			int mX = 0;
 			int mY = 0;

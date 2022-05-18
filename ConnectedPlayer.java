@@ -34,11 +34,11 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			}
 		}
 	}
-	public boolean equals(ConnectedPlayer to) {
+	public boolean equals(Object to) {
 		if (to == null) {
 			return false;
 		}
-		return (compareTo(to) == 0);
+		return (compareTo((ConnectedPlayer) to) == 0);
 	}
 	public int compareTo(ConnectedPlayer to) {
 		if (to.SUID == SUID) {
@@ -106,8 +106,11 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			kick("Spawn blocked!");
 			return;
 		}
+		Server.Locker.lock();
 		Server.level.ent[EID] = new EntityPlayer(Server.level.spawnX, Server.level.spawnY, 0, (short) 10);
 		Server.level.entities.put((((long) Server.level.ent[EID].x) << 32) | ((long) Server.level.ent[EID].y), EID);
+		Server.buf.put((byte) 6).put((byte) 2).putInt(Server.level.ent[EID].x).putInt(Server.level.ent[EID].y).putLong(Server.level.ent[EID].data).putShort(Server.level.ent[EID].health);
+		Server.Locker.unlock();
 		if (clientVersion < Server.version) {
 			System.out.println("A client was kicked for being outdated: " + socket);
 			socket.close();
@@ -115,7 +118,9 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		}
 		System.out.println("A client has connected: " + socket);
 		{
+			Server.Locker.lock();
 			byte[] initial = Server.level.toBytes();
+			Server.Locker.unlock();
 			dOut.writeInt(initial.length);
 			out.write(initial);
 		}//Extra scope to allow initial to be cleaned up by the garbage collector earlier
@@ -144,9 +149,10 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	}
 	void kick(String message) throws Exception {
 		alive = false;
-		Server.players.remove(this);
-		Server.level.entities.remove((((long) Server.level.ent[EID].x) << 32) | ((long) Server.level.ent[EID].y));
-		Server.level.ent[EID] = null;
+		Server.level.ent[EID].data = -1;
+		synchronized(Server.players) {
+			Server.players.remove(this);
+		}
 		Thread.sleep(500);
 		try {
 			out.write(3);

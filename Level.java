@@ -57,7 +57,7 @@ class Level {
 		byte type;
 		for (int i = 0; i < numEntities; i++) {
 			type = readFrom.get();
-			switch (type) {
+			switch (type) {//UIC
 				case(0):
 					ent[i] = new Entity(readFrom.getInt(), readFrom.getInt(), readFrom.getLong(), readFrom.getShort());
 					break;

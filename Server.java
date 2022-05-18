@@ -51,7 +51,7 @@ public class Server {
 					try {
 						int n = 0;
 						for (Integer value : (level.entities.values().toArray(new Integer[0]))) {
-						    level.ent[value].animate();
+						    level.ent[value].animate(value);
 						}
 						ConnectedPlayer CoPl;
 						synchronized (players) {
@@ -64,7 +64,7 @@ public class Server {
 					    			CoPl.out.write(bufBytes, 0, pos);
 					    		}
 					    		catch (Exception E) {
-					    			CoPl.kick("Serverside Exception: " + E);
+					    			CoPl.kick("Exception in Socket communication to client: " + E);
 					    			i--;
 					    			continue;
 					    		}

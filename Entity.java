@@ -3,7 +3,7 @@ class Entity {
 	int x;
 	int y;
 	short health;
-	long data;
+	volatile long data;
 	byte type;
 	char face;
 	int xO;
@@ -20,7 +20,19 @@ class Entity {
 		this.data = data;
 		this.health = health;
 	}
-	void animate() {//removal,,,,health,tp,[res],face
+	boolean checkDeath(int EID) {
+		if (health > 0) {
+			return false;
+		}
+		Server.level.entities.remove((((long) Server.level.ent[EID].x) << 32) | ((long) Server.level.ent[EID].y));
+		Server.level.ent[EID] = null;
+		Server.buf.put((byte) 7).putInt(x).putInt(y);
+		return true;
+	}
+	void animate(int EID) {//,,,,health,teleport,[reserved],face
+		if (checkDeath(EID)) {
+			return;
+		}
 		face = (face == '\u203c') ? '\u0021' : '\u203c';
 		Server.buf.put((byte) 1).putInt(x).putInt(y).putChar(face);
 	}
@@ -65,6 +77,9 @@ class Entity {
 				Server.buf.put((byte) 4).putInt(xO).putInt(yO).putInt(x).putInt(y);
 				xO = x;
 				yO = y;
+				if (health > -30000) {
+					health--;
+				}
 				return true;
 			}
 			return false;
