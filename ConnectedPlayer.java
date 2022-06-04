@@ -17,7 +17,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	public long SUID;
 	public volatile boolean alive = true;
 	public int clientVersion;
-	static boolean genInit = false;
+	private static boolean genInit = false;
 	static private byte[] superSecret = new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0};//Arbitrary random value used for seeding of the authentication nonce generator
 	static private byte[] secret = new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0};//Arbitrary random value used for authentication
 	static private SecureRandom nonceGen;
@@ -107,7 +107,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			return;
 		}
 		Server.Locker.lock();
-		Server.level.ent[EID] = new EntityPlayer(Server.level.spawnX, Server.level.spawnY, 0, (short) 10);
+		Server.level.ent[EID] = new EntityPlayer(Server.level.spawnX, Server.level.spawnY, (System.currentTimeMillis() << 6) & 0x380, (short) 10);
 		Server.level.entities.put((((long) Server.level.ent[EID].x) << 32) | ((long) Server.level.ent[EID].y), EID);
 		Server.buf.put((byte) 6).put((byte) 2).putInt(Server.level.ent[EID].x).putInt(Server.level.ent[EID].y).putLong(Server.level.ent[EID].data).putShort(Server.level.ent[EID].health);
 		Server.Locker.unlock();
@@ -121,7 +121,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			Server.Locker.lock();
 			byte[] initial = Server.level.toBytes();
 			Server.Locker.unlock();
-			dOut.writeInt(initial.length);
+			dOut.writeInt(initial.length);//TODO Use gzip
 			out.write(initial);
 		}//Extra scope to allow initial to be cleaned up by the garbage collector earlier
 		dOut.writeShort(Server.turnInterval);
@@ -136,6 +136,19 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 					n &= 3;
 					synchronized (Server.level.ent[EID]) {
 						Server.level.ent[EID].data = ((Server.level.ent[EID].data & (~0xf)) ^ ((((Server.level.ent[EID].data) & (0x33 >>> (n & 2))) ^ ((n | 2) << (~(n | 0xfffffffd)))) & 0xf));
+					}
+				}
+				else {
+					switch (n) {
+						case (100):
+							Server.level.ent[EID].data |= 0x20;
+							break;
+						case (101):
+							Server.level.ent[EID].data |= 0x10;
+							break;
+						case (102):
+							Server.level.ent[EID].data |= 0x400;
+							break;
 					}
 				}
 			}
@@ -168,7 +181,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	}
 	static void initRandom() throws Exception {
 		if (genInit) {
-			throw new Exception("Reinitialization of the authentication nonce generator is now allowed");
+			throw new Exception("Reinitialization of the authentication nonce generator is not permitted");
 		}
 		byte[] seed = new byte[superSecret.length + 8];
 		System.arraycopy(superSecret, 0, seed, 0, superSecret.length);

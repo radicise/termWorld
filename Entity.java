@@ -6,6 +6,7 @@ class Entity {
 	volatile long data;
 	byte type;
 	char face;
+	byte color;
 	int xO;
 	int yO;
 	Entity() {
@@ -19,6 +20,7 @@ class Entity {
 		yO = y;
 		this.data = data;
 		this.health = health;
+		color = 16;
 	}
 	boolean checkDeath(int EID) {
 		if (health > 0) {
@@ -38,6 +40,12 @@ class Entity {
 	}
 	boolean moveBy(int Dx, int Dy, int d) {//Don't move by anything that would move the player out of the bounds of int values if not corrected
 		if (d > 15) {
+			return false;
+		}
+		if ((d > 0) && (health > -30000)) {
+			health--;
+		}
+		if ((Dx == 0) && (Dy == 0)) {
 			return false;
 		}
 		int mX;
@@ -77,9 +85,6 @@ class Entity {
 				Server.buf.put((byte) 4).putInt(xO).putInt(yO).putInt(x).putInt(y);
 				xO = x;
 				yO = y;
-				if (health > -30000) {
-					health--;
-				}
 				return true;
 			}
 			return false;

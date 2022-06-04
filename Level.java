@@ -14,7 +14,7 @@ class Level {
 	int VID;
 	int spawnX;
 	int spawnY;
-	TreeMap<Long, Character> dispFaces;
+	TreeMap<Long, Integer> dispFaces;
 	static final byte[] blankAndInterval = new byte[]{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, -24};
 	Integer entPlace = 0;
 	Level(FixedFrame terrain, TreeMap<Long, Integer> entities, Entity[] ent, long age, int VID, int spawnX, int spawnY) {
@@ -25,9 +25,9 @@ class Level {
         this.spawnY = spawnY;
 		this.ent = ent;
 		this.VID = VID;
-		dispFaces = new TreeMap<Long, Character>();
+		dispFaces = new TreeMap<Long, Integer>();
 		entities.forEach((Long L, Integer I) -> {
-			dispFaces.put((L >>> 32) ^ (L << 32), ent[I].face);
+			dispFaces.put((L >>> 32) ^ (L << 32), I);
 		});
 	}
 	synchronized byte[] toBytes() {
@@ -86,12 +86,21 @@ class Level {
 			lastEntity = dispFaces.lastKey();
 		}
 		long o = 0;
+		int p;
 		Text.buffered.write(Text.delimiter);
 		for (int i = 0; i < terrain.height; i++) {
 			o = ((long) i) << 32;
 			for (int n = 0; n < terrain.width; n++) {
 				if (moreEntities && (nextEntity == o)) {
-					Text.buffered.write(dispFaces.get(nextEntity));
+					p = dispFaces.get(nextEntity);
+					if (Text.escapes) {
+						Text.buffered.write(Text.colors[Server.level.ent[p].color]);
+						Text.buffered.write(Server.level.ent[p].face);
+						Text.buffered.write(Text.colorClear);
+					}
+					else {
+						Text.buffered.write(Server.level.ent[p].face);
+					}
 					nextEntity = dispFaces.higherKey(nextEntity);
 					if (o == lastEntity) {
 						moreEntities = false;
@@ -137,7 +146,7 @@ class Level {
 				terrain[i] = 3;
 			}
 			else {
-				switch (r & 15) {
+				switch (r & 0xf) {
 					case (0):
 					case (1):
 						terrain[i] = 1;
@@ -146,9 +155,9 @@ class Level {
 						terrain[i] = 2;
 						break;
 				}
-				switch ((r >>> 4) & 15) {
+				switch ((r >>> 4) & 0x3f) {
 					case (0):
-						ent[ePlace] = new Dog(i % width, i / width, 0L, (short) 10);
+						ent[ePlace] = new Dog(i % width, i / width, (r >>> 10) & 0x38f, (short) 10);
 						entities.put((((long) (i % width)) << 32) ^ ((long) (i / width)), ePlace);
 						ePlace++;
 						break;

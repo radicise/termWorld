@@ -1,11 +1,11 @@
 package termWorld;
 /*import java.io.FileOutputStream;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.util.TreeMap;
 */import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -18,7 +18,7 @@ public class Server {
 	public static int port = defaultPort;
 	public static volatile String levelname = "defaultLevel";
 	public static Level level = null;
-	public static short turnInterval = 189;
+	public static short turnInterval = 200;
 	static ArrayList<ConnectedPlayer> players = new ArrayList<ConnectedPlayer>();
 	static Long playerVal = new Long(0L);
 	static ByteBuffer buf = ByteBuffer.allocate(4096).order(ByteOrder.BIG_ENDIAN);
@@ -36,9 +36,9 @@ public class Server {
 		fileOut.close();
 		System.exit(0);
 		*/try {
-			level = Level.fromBytes(Files.readAllBytes(FileSystems.getDefault().getPath(levelname)));
-			/**/level = Level.generate(40, 40, 3827L);
-		/**/}
+			/*level = Level.fromBytes(Files.readAllBytes(FileSystems.getDefault().getPath(levelname)));*/
+			level = Level.generate(40, 40, 3827L);
+		}
 		catch (Exception E) {
 			System.out.println("An Exception has occurred: " + E);
 			System.exit(1);
@@ -77,8 +77,8 @@ public class Server {
 					catch (Exception E) {
 						System.out.println("An Exception has occurred: " + E);
 						System.exit(6);
-						Locker.unlock();
 					}
+					level.age++;
 					Locker.unlock();
 				}
 				else {
@@ -92,6 +92,7 @@ public class Server {
 			}
 			catch (Exception E) {
 				System.out.println("An Exception has occurred: " + E);
+				E.printStackTrace();
 				server.close();
 				System.exit(3);
 			}

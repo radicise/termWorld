@@ -20,6 +20,8 @@ public class Client {
 	public static volatile boolean down;
 	public static volatile boolean left;
 	public static volatile boolean right;
+	public static volatile boolean placed;
+	public static volatile boolean destroyed;
 	static String username;
 	static byte[] unB = new byte[32];
 	static long UID;
@@ -58,6 +60,28 @@ public class Client {
 						right = true;
 						System.out.print('\u2192');
 						out.write(129);
+					}
+					break;
+				case (105):
+					if (!placed) {
+						placed = true;
+						System.out.print('+');
+						out.write(100);
+					}
+					break;
+				case (73):
+					if (!placed) {
+						placed = true;
+						System.out.print('-');
+						out.write(102);
+					}
+					break;
+				case (111):
+				case (79):
+					if (!destroyed) {
+						destroyed = true;
+						System.out.print('*');
+						out.write(101);
 					}
 					break;
 			}
@@ -165,28 +189,28 @@ public class Client {
 		username = arg[0];
 		serverVersion = dIn.readInt();
 		dOut.writeInt(Server.version);
-		new Thread() {
-			public void run() {
-				try {
-					movementCapture();
-				}
-				catch (Exception E) {
-					System.out.println("An Exception has occurred: " + E);
-					System.exit(4);
-				}
-			}
-		}.start();
-		byte[] levelBytes = new byte[dIn.readInt()];
-		in.read(levelBytes);
-		Server.level = Level.fromBytes(levelBytes);
-		Server.level.display();
-		Text.buffered.flush();
-		byte b;
-		int i;
-		turnInterval = dIn.readShort();
-		byte[] mB;
-		long id;
 		try {
+			new Thread() {
+				public void run() {
+					try {
+						movementCapture();
+					}
+					catch (Exception E) {
+						System.out.println("An Exception has occurred: " + E);
+						System.exit(4);
+					}
+				}
+			}.start();
+			byte[] levelBytes = new byte[dIn.readInt()];
+			in.read(levelBytes);
+			Server.level = Level.fromBytes(levelBytes);
+			Server.level.display();
+			Text.buffered.flush();
+			byte b;
+			int i;
+			turnInterval = dIn.readShort();
+			byte[] mB;
+			long id;
 			while (true) {
 				while ((b = ((byte) in.read())) != 2) {
 					if ((b & 2) == 0) {
@@ -194,14 +218,13 @@ public class Client {
 						i = Server.level.entities.get(id);
 						if ((b & 1) == 1) {
 							Server.level.ent[i].face = dIn.readChar();
-							Server.level.dispFaces.replace((id >>> 32) ^ (id << 32), Server.level.ent[i].face);
 						}
 						if ((b & 4) == 4) {
 							Server.level.entities.remove(id);
 							Server.level.dispFaces.remove((id >>> 32) ^ (id << 32));
 							Server.level.ent[i].x = dIn.readInt();
 							Server.level.ent[i].y = dIn.readInt();
-							Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) ^ ((long) Server.level.ent[i].x), Server.level.ent[i].face);
+							Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) ^ ((long) Server.level.ent[i].x), i);
 							Server.level.entities.put((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y), i);
 						}
 					}
@@ -210,6 +233,9 @@ public class Client {
 						in.read(mB);
 						System.out.println("Disconnected with reason: " + new String(mB, "UTF-8"));
 						System.exit(8);
+					}
+					else if (b == 10) {
+						Server.level.terrain.tiles[dIn.readInt()] = (byte) (in.read());
 					}
 					else if (b == 6) {
 						i = Server.level.nextSlot();
@@ -226,7 +252,7 @@ public class Client {
 							default:
 								Server.level.ent[i] = new Entity(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
 						}
-						Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) | ((long) Server.level.ent[i].x), Server.level.ent[i].face);
+						Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) | ((long) Server.level.ent[i].x), i);
 						Server.level.entities.put((((long) Server.level.ent[i].x) << 32) | ((long) Server.level.ent[i].y), i);
 					}
 					else if (b == 7) {
@@ -240,6 +266,8 @@ public class Client {
 				left = false;
 				down = false;
 				right = false;
+				placed = false;
+				destroyed = false;
 				Text.buffered.flush();
 			}
 		}

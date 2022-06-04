@@ -1,5 +1,6 @@
 package termWorld;
 class EntityPlayer extends Entity {
+	int p;
 	EntityPlayer(int x, int y, long data, short health) {
 		face = '\u263a';
 		type = 2;
@@ -9,6 +10,10 @@ class EntityPlayer extends Entity {
 		yO = y;
 		this.data = data;
 		this.health = health;
+		color = (byte) ((data >>> 6) & 0xf);
+		if ((color == 0) || (color == 7) || (color == 8) || (color == 15)) {
+			color = 9;
+		}
 	}
 	boolean checkDeath(int EID) {
 		if (data < 0) {
@@ -33,8 +38,40 @@ class EntityPlayer extends Entity {
 				mY = ((int) ((data & 1) << 1)) - 1;
 			}
 			moveBy(mX, mY, 0);
-			data &= (~0xf);
 		}
-		data &= (~0xf);
+		if ((data & 0x10) != 0) {
+			p = (y * Server.level.terrain.width) + x;
+			if (x > 0) {
+				Server.level.terrain.tiles[p - 1] = (byte) (0);
+				Server.buf.put((byte) 10).putInt(p - 1).put((byte) (0));
+			}
+			if (x < (Server.level.terrain.width - 1)) {
+				Server.level.terrain.tiles[p + 1] = (byte) (0);
+				Server.buf.put((byte) 10).putInt(p + 1).put((byte) (0));
+			}
+			Server.level.terrain.tiles[p] = (byte) (0);
+			Server.buf.put((byte) 10).putInt(p).put((byte) (0));
+			p -= Server.level.terrain.width;
+			if (p >= 0) {
+				Server.level.terrain.tiles[p] = (byte) (0);
+				Server.buf.put((byte) 10).putInt(p).put((byte) (0));
+			}
+			p += (Server.level.terrain.width * 2);
+			if (p < Server.level.terrain.tiles.length) {
+				Server.level.terrain.tiles[p] = (byte) (0);
+				Server.buf.put((byte) 10).putInt(p).put((byte) (0));
+			}
+		}
+		if ((data & 0x20) != 0) {
+			p = (y * Server.level.terrain.width) + x;
+			Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + 1) % Text.amountTiles);
+			Server.buf.put((byte) 10).putInt(p).put(Server.level.terrain.tiles[p]);
+		}
+		if ((data & 0x400) != 0) {
+			p = (y * Server.level.terrain.width) + x;
+			Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + (Text.amountTiles - 1)) % Text.amountTiles);
+			Server.buf.put((byte) 10).putInt(p).put(Server.level.terrain.tiles[p]);
+		}
+		data &= (~0x43f);
 	}
 }
