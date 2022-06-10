@@ -12,13 +12,13 @@ import java.util.TimerTask;
 import java.util.concurrent.locks.ReentrantLock;
 public class Server {
 	static ReentrantLock Locker = new ReentrantLock();
-	public static final int version = 1;
-	public static final String versionString = "0.0.1";
+	public static final int version = 2;
+	public static final String versionString = "0.0.2";
 	public static final int defaultPort = 15651;
 	public static int port = defaultPort;
 	public static volatile String levelname = "defaultLevel";
 	public static Level level = null;
-	public static short turnInterval = 200;
+	public static short turnInterval = 189;
 	static ArrayList<ConnectedPlayer> players = new ArrayList<ConnectedPlayer>();
 	static Long playerVal = new Long(0L);
 	static ByteBuffer buf = ByteBuffer.allocate(4096).order(ByteOrder.BIG_ENDIAN);
@@ -62,7 +62,7 @@ public class Server {
 							while (n < i) {
 					    		CoPl = players.get(n);
 					    		try {
-					    			CoPl.out.write(bufBytes, 0, pos);
+					    			CoPl.out.write(bufBytes, 0, pos);//TODO Prevent lag due to blocking writes
 					    		}
 					    		catch (Exception E) {
 					    			CoPl.kick("Exception in Socket communication to client: " + E);

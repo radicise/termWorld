@@ -71,7 +71,7 @@ class Entity {
 		if ((mX == x) && (mY == y)) {
 			return false;
 		}
-		if (Server.level.terrain.tiles[(Server.level.terrain.width * mY) + mX] == 3) {
+		if (Server.level.terrain.tiles[(Server.level.terrain.width * mY) + mX] == 1) {
 			return false;
 		}
 		if (Server.level.entities.containsKey((((long) mX) << 32) ^ ((long) mY))) {

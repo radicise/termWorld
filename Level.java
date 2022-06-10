@@ -15,8 +15,8 @@ class Level {
 	int spawnX;
 	int spawnY;
 	TreeMap<Long, Integer> dispFaces;
-	static final byte[] blankAndInterval = new byte[]{0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, -24};
-	Integer entPlace = 0;
+	private int entPlace = 0;
+	private int start;
 	Level(FixedFrame terrain, TreeMap<Long, Integer> entities, Entity[] ent, long age, int VID, int spawnX, int spawnY) {
 		this.terrain = terrain;
 		this.entities = entities;
@@ -46,7 +46,7 @@ class Level {
 		int width = (((((data[4] & 0xff) << 8) | (data[5] & 0xff) << 8) | (data[6] & 0xff)) << 8) | (data[7] & 0xff);
 		int height = (((((data[8] & 0xff) << 8) | (data[9] & 0xff) << 8) | (data[10] & 0xff)) << 8) | (data[11] & 0xff);
 		int marker = width * height;
-		Entity[] ent = new Entity[(((((data[12] & 0xff )<< 8) | (data[13] & 0xff) << 8) | (data[14] & 0xff)) << 8) | (data[15] & 0xff)];
+		Entity[] ent = new Entity[(((((data[12] & 0xff) << 8) | (data[13] & 0xff) << 8) | (data[14] & 0xff)) << 8) | (data[15] & 0xff)];
 		byte[] tiles = Arrays.copyOfRange(data, 16, marker + 16);
 		ByteBuffer readFrom = ByteBuffer.wrap(Arrays.copyOfRange(data, marker + 16, data.length)).order(ByteOrder.BIG_ENDIAN);
 		long age = readFrom.getLong();
@@ -116,20 +116,17 @@ class Level {
 		Text.buffered.write(Text.delimiter);
 	}
 	synchronized int nextSlot() throws Exception {
-		synchronized(entPlace) {
-			int start = entPlace;
-			while (ent[entPlace] != null) {
-				entPlace++;
-				if (entPlace == ent.length) {
-					entPlace = 0;
-				}
-				if (entPlace == start) {
-					System.out.println("Warning: Could not allocate Entity slot (Too many Entity objects loaded!)");
-					throw new Exception("could not allocate Entity slot");
-				}
+		start = entPlace;
+		while (ent[entPlace] != null) {
+			entPlace++;
+			if (entPlace == ent.length) {
+				entPlace = 0;
 			}
-			ent[entPlace] = new Entity(0, 0, 0L, (short) 0);
+			if (entPlace == start) {
+				throw new Exception("Could not allocate Entity slot");
+			}
 		}
+		ent[entPlace] = new Entity(0, 0, 0L, (short) 0);
 		return entPlace;
 	}
 	static Level generate(int width, int height, long seed) {
@@ -143,13 +140,13 @@ class Level {
 		for (int i = 0; i < terrain.length; i++) {
 			r = rand.nextInt();
 			if (r < -((Integer.MAX_VALUE / 2) + 1)) {
-				terrain[i] = 3;
+				terrain[i] = 1;
 			}
 			else {
 				switch (r & 0xf) {
 					case (0):
 					case (1):
-						terrain[i] = 1;
+						terrain[i] = 3;
 						break;
 					case (2):
 						terrain[i] = 2;

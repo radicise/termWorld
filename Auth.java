@@ -42,7 +42,7 @@ import java.io.FileOutputStream;
 		System.arraycopy(verySecret, 0, seed, 0, verySecret.length);
 		long thenTime = System.currentTimeMillis();
 		for (int i = 0; i < 8; i++) {
-			seed[seed.length - 1 - i] = (byte) (thenTime >> (i * 8));
+			seed[seed.length - 1 - i] = (byte) (thenTime >>> (i * 8));
 		}
 		rand = new SecureRandom(seed);
 		try (ServerSocket serv = new ServerSocket(port)) {

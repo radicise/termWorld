@@ -30,7 +30,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			SUID = Server.playerVal;
 			Server.playerVal++;
 			if (Server.playerVal == 0) {
-				throw new Exception("Session-unique ID overflow imminent");
+				throw new Exception("Session-unique ID overflow on next player join");
 			}
 		}
 	}
@@ -99,35 +99,40 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		}
 		dOut.writeInt(Server.version);
 		clientVersion = dIn.readInt();
-		if (Server.level.entities.containsKey((((long) Server.level.spawnX) << 32) | ((long) Server.level.spawnY))) {
-			dOut.writeInt(37);
-			out.write(Level.blankAndInterval);
-			Thread.sleep(500);
-			kick("Spawn blocked!");
+		if (clientVersion < Server.version) {
+			out.write(0x55);
+			dOut.writeInt(32);
+			out.write("Outdated client!".getBytes("UTF-16BE"));
+			alive = false;
+			Server.level.ent[EID] = null;
+			socket.close();
 			return;
 		}
+		if (Server.level.entities.containsKey((((long) Server.level.spawnX) << 32) | ((long) Server.level.spawnY))) {
+			out.write(0x55);
+			dOut.writeInt(28);
+			out.write("Spawn blocked!".getBytes("UTF-16BE"));
+			alive = false;
+			Server.level.ent[EID] = null;
+			socket.close();
+			return;
+		}
+		out.write(0x63);
 		Server.Locker.lock();
 		Server.level.ent[EID] = new EntityPlayer(Server.level.spawnX, Server.level.spawnY, (System.currentTimeMillis() << 6) & 0x380, (short) 10);
 		Server.level.entities.put((((long) Server.level.ent[EID].x) << 32) | ((long) Server.level.ent[EID].y), EID);
 		Server.buf.put((byte) 6).put((byte) 2).putInt(Server.level.ent[EID].x).putInt(Server.level.ent[EID].y).putLong(Server.level.ent[EID].data).putShort(Server.level.ent[EID].health);
-		Server.Locker.unlock();
-		if (clientVersion < Server.version) {
-			System.out.println("A client was kicked for being outdated: " + socket);
-			socket.close();
-			return;
-		}
 		System.out.println("A client has connected: " + socket);
 		{
-			Server.Locker.lock();
 			byte[] initial = Server.level.toBytes();
-			Server.Locker.unlock();
 			dOut.writeInt(initial.length);//TODO Use gzip
 			out.write(initial);
 		}//Extra scope to allow initial to be cleaned up by the garbage collector earlier
 		dOut.writeShort(Server.turnInterval);
-		synchronized (Server.players) {
-			Server.players.add(this);
-		}
+		dOut.writeInt(Server.level.ent[EID].x);//TODO Prevent lag due to blocking writes
+		dOut.writeInt(Server.level.ent[EID].y);//TODO Prevent lag due to blocking writes
+		Server.players.add(this);
+		Server.Locker.unlock();
 		int n;
 		try {
 			while (true) {
@@ -174,10 +179,10 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			out.write(mB);
 		}
 		catch (Exception E) {
-			System.out.println("Player at " + socket + " was disconnected with reason: " + message);
+			System.out.println("Player on " + socket + " was disconnected with reason: " + message);
 			return;
 		}
-		System.out.println("Player at " + socket + " was kicked with reason: " + message);
+		System.out.println("Player on " + socket + " was kicked with reason: " + message);
 	}
 	static void initRandom() throws Exception {
 		if (genInit) {

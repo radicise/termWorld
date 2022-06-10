@@ -64,12 +64,12 @@ class EntityPlayer extends Entity {
 		}
 		if ((data & 0x20) != 0) {
 			p = (y * Server.level.terrain.width) + x;
-			Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + 1) % Text.amountTiles);
+			Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + 1) % Text.amountAccessible);
 			Server.buf.put((byte) 10).putInt(p).put(Server.level.terrain.tiles[p]);
 		}
 		if ((data & 0x400) != 0) {
 			p = (y * Server.level.terrain.width) + x;
-			Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + (Text.amountTiles - 1)) % Text.amountTiles);
+			Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + (Text.amountAccessible - 1)) % Text.amountAccessible);
 			Server.buf.put((byte) 10).putInt(p).put(Server.level.terrain.tiles[p]);
 		}
 		data &= (~0x43f);

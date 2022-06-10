@@ -25,6 +25,7 @@ public class Client {
 	static String username;
 	static byte[] unB = new byte[32];
 	static long UID;
+	public static int EID;
 	static void movementCapture() throws Exception {
 		int n = 0;
 		while(true) {
@@ -188,7 +189,15 @@ public class Client {
 		}//Extra scope for security and garbage collection purposes
 		username = arg[0];
 		serverVersion = dIn.readInt();
+		System.out.println("Server version: " + serverVersion);
 		dOut.writeInt(Server.version);
+		if (in.read() == 0x55) {
+			byte[] msg = new byte[dIn.readInt()];
+			in.read(msg);
+			System.out.println("Disconnected with reason: " + (new String(msg, "UTF-16BE")));//TODO Prevent message spoofing
+			socket.close();
+			return;
+		}
 		try {
 			new Thread() {
 				public void run() {
@@ -204,13 +213,14 @@ public class Client {
 			byte[] levelBytes = new byte[dIn.readInt()];
 			in.read(levelBytes);
 			Server.level = Level.fromBytes(levelBytes);
-			Server.level.display();
-			Text.buffered.flush();
 			byte b;
 			int i;
 			turnInterval = dIn.readShort();
+			System.out.println("Turn interval: " + turnInterval + "ms");
 			byte[] mB;
 			long id;
+			long oID = dIn.readLong();
+			boolean notFound = true;
 			while (true) {
 				while ((b = ((byte) in.read())) != 2) {
 					if ((b & 2) == 0) {
@@ -248,6 +258,12 @@ public class Client {
 								break;
 							case(2):
 								Server.level.ent[i] = new EntityPlayer(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
+								if (notFound) {
+									if (oID == ((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y))) {
+										EID = i;
+										notFound = false;
+									}
+								}
 								break;
 							default:
 								Server.level.ent[i] = new Entity(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
@@ -261,6 +277,19 @@ public class Client {
 						Server.level.entities.remove(id);
 					}
 				}
+				if (Text.escapes) {
+					Text.buffered.write("\u001b[2J\u001b[1;1H");
+					Thread.sleep(100);
+				}
+				Text.buffered.write('[');
+				Text.buffered.write(Text.tiles[Server.level.terrain.tiles[(Server.level.ent[EID].y * Server.level.terrain.width) + Server.level.ent[EID].x]]);
+				Text.buffered.write(']');
+				Text.buffered.write('(');
+				Text.buffered.write(Integer.toString(Server.level.ent[EID].x));
+				Text.buffered.write(',');
+				Text.buffered.write(' ');
+				Text.buffered.write(Integer.toString(Server.level.ent[EID].y));
+				Text.buffered.write(')');
 				Server.level.display();
 				up = false;
 				left = false;
@@ -273,6 +302,7 @@ public class Client {
 		}
 		catch (Exception E) {
 			System.out.println("An Exception has occurred: " + E);
+			E.printStackTrace(System.out);
 			System.exit(13);
 		}
 	}
