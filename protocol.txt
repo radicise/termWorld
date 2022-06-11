@@ -1,0 +1,91 @@
+Definitions:
+long: Signed 8-bit big-endian integer
+int: Signed 4-byte big-endian integer
+short: Signed 2-byte big-endian integer
+char: Unsigned 2-byte integer, is the Unicode value of a character which lies within Basic Multilingual Plane
+byte: Octet
+X-coordinate: amount of tiles right starting from 0 at leftmost
+Y-coordinate, amount of tiles down starting from 0 at topmost
+
+Icon defaults:
+Dogs start with u+0064 or equivalent as the starting icon
+Players start with u+263a or equivalent as the starting icon
+Plain entities start with u+203c or equivalent as the starting icon
+
+Protocol:
+
+Auth:
+<auth protocol>
+
+After auth:
+S -> C
+int, version ID
+
+C -> S
+int, version ID
+
+S -> C
+byte, signifies if the server will accept the player. 0x63 is acceptance, 0x55 is rejection; if rejected, an int value containing the length of the rejection message in bytes is sent and then followed by the message itself, text in big-endian UTF-16; rejected players must then disconnect
+
+S -> C
+int, the length of the serialized level data in bytes, followed by the serialized level data;
+Serialized level data format:
+        int, version ID
+        int, level width, in tiles
+        int, level height, in tiles
+        int, maximum possible amount of entities
+        byte values of tile IDs for the level, each tile ID is 1 byte, length is width * height, order is left-to-right for each line, lines top-to-bottom
+        long, level age, in animation frames
+        int, player spawn X-coordinate
+        int, player spawn Y-coordinate
+        int, amount of serialized entities, followed by the serialized data for each entity
+        Serialized entity data format:
+                byte, entity type; 0 = Entity, 1 = Dog, 2 = EntityPlayer
+                int, X-coordinate
+                int, Y-coordinate
+                long, raw data available to the entity
+                short, health amount
+short, animation interval time in milliseconds
+int, the client's matching EntityPlayer's X-coordinate
+int, the client's matching EntityPlayer's Y-coordinate
+byte, 0x06
+serialized entity data for the client's matching EntityPlayer
+
+The protocol then defines the 2 different communication loops, which continue through the remainder of the client's connection:
+
+S -> C
+(pseudo-code)
+[byte fID]//function ID
+if ((fID & 2) == 0) {//entity update
+        [int xPos]//entity's X-coordinate
+        [int yPos]//entity's Y-coordinate
+        if ((fID & 1) == 1) {//entity icon update
+                [char face]//entity's new icon
+        }
+        if ((fID & 4 == 4) {//entity movement
+                [int newX]//entity's new X-coordinate
+                [int newY]//entity's new Y-coordinate
+        }
+}
+else {
+        switch (fID) {
+                case (3)://disconnection
+                        [int msgSize]
+                        [byte-sequence size=msgSize msg]//disconnection message, UTF-16BE
+                        break;
+                case (6)://new entity
+                        [byte-sequence entityData]//serialized entity data
+                        break;
+                case (7)://remove entity
+                        break;
+                case (10)://tile change
+                        [int tileNum]//which tile, represented by its serialized numeric position (tilePos = [int(tileNum / levelWidth), tileNum % levelWidth])
+                        [byte tileID]//new value
+        }
+}
+
+C -> S
+Each action is represented by a different byte sent to the server
+Forward-cycle tile under client's watching EntityPlayer: 0x64
+Destroy tile under client's matching EntityPlayer: 0x65
+Backward-cycle tile under client's watching EntityPlayer: 0x64
