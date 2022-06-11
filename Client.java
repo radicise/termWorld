@@ -11,7 +11,8 @@ import java.util.Arrays;
 public class Client {
 	public static byte[] IPv4Host = new byte[]{127, 0, 0, 1};
 	public static byte[] authIPv4Host = new byte[]{127, 0, 0, 1};
-	public static int authPort = 15652;
+	public static final int defaultAuthPort = 15652;
+	public static int authPort = defaultAuthPort;
 	public static int serverVersion;
 	static OutputStream out;
 	static InputStream in;
@@ -90,6 +91,20 @@ public class Client {
 	}
 	public static void main(String[] arg) throws Exception {
 		System.out.println("termWorld v" + Server.versionString);
+		{
+			String[] ipD = arg[3].split(":");
+			Server.port = Integer.parseInt(ipD[1]);
+			ipD = ipD[0].split("\\.");
+			for (int q = 0; q < 4; q++) {
+				IPv4Host[q] = (byte) (Integer.parseInt(ipD[q]));
+			}
+			ipD = arg[4].split(":");
+			authPort = Integer.parseInt(ipD[1]);
+			ipD = ipD[0].split("\\.");
+			for (int q = 0; q < 4; q++) {
+				authIPv4Host[q] = (byte) (Integer.parseInt(ipD[q]));
+			}
+		}
 		Socket socket = null;
 		try {
 			socket = new Socket(InetAddress.getByAddress(IPv4Host), Server.port);
@@ -125,7 +140,6 @@ public class Client {
 			}
 			catch (Exception E) {
 				System.out.println("Could not connect to authentication server due to an Exception having occurred: " + E);
-				authSock.close();
 				socket.close();
 				System.exit(8);
 			}

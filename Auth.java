@@ -18,7 +18,8 @@ import java.io.FileOutputStream;
 	static List<sAcct> servers/* = new ArrayList<sAcct>()*/;
 	static DataInputStream in;
 	static DataOutputStream out;
-	static final int port = 15652;
+	static final int defaultPort = 15652;
+	static int port = defaultPort;
 	static private SecureRandom rand;
 	static private byte[] verySecret = new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0};//Arbitrary random value used for seeding of the nonce generator
 	public static void main(String[] args) throws Exception {
