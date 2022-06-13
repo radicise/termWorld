@@ -6,7 +6,8 @@ char: Unsigned 2-byte integer, is the Unicode value of a character which lies wi
 byte: Octet
 X-coordinate: amount of tiles right starting from 0 at leftmost
 Y-coordinate, amount of tiles down starting from 0 at topmost
-color = (data >>> 6) & 0xf
+
+colorID = (data >>> 6) & 0xf
 
 
 Icon defaults:
@@ -78,7 +79,10 @@ The protocol then defines the 2 different communication loops, which continue th
 S -> C
 (pseudo-code)
 [byte fID]//function ID
-if ((fID & 2) == 0) {//entity update
+if (fID == 2) {
+        //render the level
+}
+else if ((fID & 2) == 0) {//entity update
         [int xPos]//entity's X-coordinate
         [int yPos]//entity's Y-coordinate
         if ((fID & 1) == 1) {//entity icon update
@@ -105,7 +109,6 @@ else {
                         [byte tileID]//new value
         }
 }
-
 C -> S
 Each action is represented by a different byte sent to the server
 Forward-cycle tile under client's watching EntityPlayer: 0x64
