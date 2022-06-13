@@ -6,6 +6,8 @@ char: Unsigned 2-byte integer, is the Unicode value of a character which lies wi
 byte: Octet
 X-coordinate: amount of tiles right starting from 0 at leftmost
 Y-coordinate, amount of tiles down starting from 0 at topmost
+color = (data >>> 6) & 0xf
+
 
 Icon defaults:
 Dogs start with u+0064 or equivalent as the starting icon
@@ -15,7 +17,27 @@ Plain entities start with u+203c or equivalent as the starting icon
 Protocol:
 
 Auth:
-<auth protocol>
+
+
+Username and password are in UTF-16BE, padded with 0x20 until 32 bytes
+The `+' operator denotes the concatenation of multiple terms, the result being the bytes of the LHO followed by those of the RHO
+userID and serverID are long values
+Nonces are 32 bytes
+Hashes are sha-256
+Upon rejection, the client must quit immediately
+
+Client -> Server: <username>
+Server -> Client: <nonce0> + <serverID>
+Client -> Auth: 0x63 + <userID>
+Auth -> Client: 0x63 for acceptance, 0x55 for rejection due to userID not existing at the authentication server
+Auth -> Client: <nonce1>
+Client -> Auth: <serverID> + <nonce0> + hash(<password> + <nonce1> + <userID>)
+Auth -> Client: 0x63 for acceptance, 0x55 for rejection due to the player's secret key not being verified
+Auth -> Client: 0x63 for acceptance, 0x55 for rejection due to the target server not being registered with the authentication server
+Auth -> Client: hash(<username> + <nonce0> + <server>.<currentSecret> + <userID>)
+Client -> Server: <username> + <userid> + <the hash that the server gave>
+Server -> Client: 0x63 for acceptance, 0x55 for rejection
+
 
 After auth:
 S -> C
