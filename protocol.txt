@@ -114,3 +114,23 @@ Each action is represented by a different byte sent to the server
 Forward-cycle tile under client's watching EntityPlayer: 0x64
 Destroy tile under client's matching EntityPlayer: 0x65
 Backward-cycle tile under client's watching EntityPlayer: 0x64
+
+
+Auth Server Password Exchange:
+
+Client -> Auth: 0x32
+Auth -> Client: <auth public key>
+Client -> Auth: encrypt(<password>) + <client public key>
+Auth -> Client: encrypt(<symmetric session key>)
+
+LOOP {
+        ALL COMMUNICATIONS ENCRYPTED WITH SESSION KEY
+        Client -> Auth: <operation id>
+        (id === 0x00) {
+                CONNECTION TERMINATION
+        }
+        (id === 0x01) { // register new account
+                Client -> Auth: <username> + <userid> + <account password>
+                Auth -> Client: 0x00 if username is taken, 0x01 if user id is taken, 0x03 on success
+        }
+}
