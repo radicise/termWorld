@@ -15,6 +15,9 @@ Dogs start with u+0064 or equivalent as the starting icon
 Players start with u+263a or equivalent as the starting icon
 Plain entities start with u+203c or equivalent as the starting icon
 
+Default Host Server Port = 15651
+Default Auth Server Port = 15652
+
 Protocol:
 
 Auth:
@@ -118,9 +121,15 @@ Backward-cycle tile under client's watching EntityPlayer: 0x64
 
 Auth Server Password Exchange:
 
+lengths are 2 byte unsigned ints
+
 Client -> Auth: 0x32
+Auth -> Client: <public key length>
 Auth -> Client: <auth public key>
+Client -> Auth: <encrypted message length> + <client public key length>
 Client -> Auth: encrypt(<password>) + <client public key>
+Auth -> Client: 0x55 on invalid password, <random byte != 0x55> on success
+Auth -> Client: <encrypted symmetric key length>
 Auth -> Client: encrypt(<symmetric session key>)
 
 LOOP {
@@ -132,5 +141,8 @@ LOOP {
         (id === 0x01) { // register new account
                 Client -> Auth: <username> + <userid> + <account password>
                 Auth -> Client: 0x00 if username is taken, 0x01 if user id is taken, 0x03 on success
+        }
+        (<unrecognized id>) {
+                Auth -> Client: 0xff
         }
 }
