@@ -8,14 +8,30 @@ const { hash } = require("./hash");
 // const readline = require("readline");
 const { Logger } = require("./logging");
 
+function getTimeStamp () {
+    const d = new Date();
+    return `(${["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getDay()]} ${d.getMonth()} ${d.getDate()} ${d.getFullYear()}) @ ${d.getHours()}:${d.getMinutes()}:${d.getSeconds()}`
+}
+
 const logger = new Logger("logs", "auth-log.log");
+
+logger.mkLog(`INSTANCE START ${getTimeStamp()}`);
+
+let no_exit = false;
 
 function onexit () {
     logger.no_logging = false;
-    logger.mkLog(`INSTANCE END @ ${new Date()}`)
+    logger.mkLog(`INSTANCE END ${getTimeStamp()}`);
+    if (!no_exit) {
+        process.exit();
+    }
 }
 
-process.addListener("exit", onexit);
+// process.on("exit", ()=>{no_exit=true;onexit();no_exit=false;});
+process.on("SIGINT", onexit);
+process.on("SIGUSR1", onexit);
+process.on("SIGUSR2", onexit);
+process.on("uncaughtException", ()=>{logger.no_logging=false;logger.mkLog("UNHANDLED EXCEPTION");onexit()});
 
 const argv = process.argv;
 

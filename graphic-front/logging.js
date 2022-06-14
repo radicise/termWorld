@@ -16,7 +16,7 @@ class Logger {
                 }
             }
         }
-        this.path = join_path(__dirname, path);
+        this.path = join_path(__dirname, ...path);
         this.no_logging = false;
     }
     mkLog (text) {
