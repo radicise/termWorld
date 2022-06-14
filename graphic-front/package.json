@@ -1,0 +1,17 @@
+{
+  "name": "graphic-front",
+  "version": "1.0.0",
+  "description": "graphical frontend for the termworld project",
+  "main": "back.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Tristan",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^19.0.4"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.1"
+  }
+}
