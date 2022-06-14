@@ -10,7 +10,7 @@ const { Logger } = require("./logging");
 
 function getTimeStamp () {
     const d = new Date();
-    return `(${["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getDay()]} ${d.getMonth()} ${d.getDate()} ${d.getFullYear()}) @ ${d.getHours()}:${d.getMinutes()}:${d.getSeconds()}`
+    return `(${["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getDay()]} ${d.getMonth()} ${d.getDate()} ${d.getFullYear()} @ ${d.getHours()}:${d.getMinutes()}:${d.getSeconds()})`;
 }
 
 const logger = new Logger("logs", "auth-log.log");
@@ -31,7 +31,7 @@ function onexit () {
 process.on("SIGINT", onexit);
 process.on("SIGUSR1", onexit);
 process.on("SIGUSR2", onexit);
-process.on("uncaughtException", ()=>{logger.no_logging=false;logger.mkLog("UNHANDLED EXCEPTION");onexit()});
+process.on("uncaughtException", (l)=>{logger.no_logging=false;logger.mkLog(`UNHANDLED EXCEPTION ${getTimeStamp()}: ${l}`);onexit()});
 
 const argv = process.argv;
 
