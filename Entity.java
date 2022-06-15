@@ -1,18 +1,23 @@
 package termWorld;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.InvalidObjectException;
 class Entity {
 	int x;
 	int y;
 	short health;
 	volatile long data;
-	byte type;
+	final byte type = 0;
 	char face;
 	byte color;
 	int xO;
 	int yO;
+	Item[] inventory;
+	static final int invSpace = 0;
 	Entity() {
 	}
 	Entity(int x, int y, long data, short health) {
-		type = 0;
+		inventory = new Item[invSpace];
 		face = '\u203c';
 		this.x = x;
 		this.y = y;
@@ -21,6 +26,43 @@ class Entity {
 		this.data = data;
 		this.health = health;
 		color = 16;
+	}
+	void toDataStream(DataOutputStream dataOut) throws Exception {//TODO Include face value
+		dataOut.write(type);
+		dataOut.writeInt(x);
+		dataOut.writeInt(y);
+		dataOut.writeLong(data);
+		dataOut.writeShort(health);
+	}
+	void serialize(DataOutputStream strm) throws Exception {
+		switch (type) { 
+			case (0):
+				toDataStream(strm);
+				return;
+			case (1):
+				((Dog) this).toDataStream(strm);
+				return;
+			case (2):
+				((EntityPlayer) this).toDataStream(strm);
+				return;
+			default:
+				throw new InvalidObjectException("Invalid Entity type");
+		}
+	}
+	static Entity fromDataStream(DataInputStream readFrom) throws Exception {
+		return new Entity(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort());
+	}
+	static Entity deserialize(DataInputStream strm) throws Exception {
+		switch (strm.read()) {
+			case (0):
+				return Entity.fromDataStream(strm);
+			case (1):
+				return Dog.fromDataStream(strm);
+			case (2):
+				return EntityPlayer.fromDataStream(strm);
+			default:
+				throw new InvalidObjectException("Invalid Entity type");
+		}
 	}
 	boolean checkDeath(int EID) {
 		if (health > 0) {
@@ -31,12 +73,24 @@ class Entity {
 		Server.buf.put((byte) 7).putInt(x).putInt(y);
 		return true;
 	}
-	void animate(int EID) {//,,,,health,teleport,[reserved],face
+	void animate(int EID) {//TODO add client-side health changing as follows:    ,,,,health,teleport,[reserved],face
 		if (checkDeath(EID)) {
 			return;
 		}
 		face = (face == '\u203c') ? '\u0021' : '\u203c';
 		Server.buf.put((byte) 1).putInt(x).putInt(y).putChar(face);
+	}
+	boolean give(Item given) {
+		for (int i = 0; i < inventory.length; i++) {
+			if (inventory[i] == null) {
+				continue;
+			}
+			if (inventory[i].thing == given.thing) {
+				inventory[i].quantity += given.quantity;//TODO prevent overflow
+				return true;
+			}
+		}
+		return false;
 	}
 	boolean moveBy(int Dx, int Dy, int d) {//Don't move by anything that would move the player out of the bounds of int values if not corrected
 		if (d > 15) {

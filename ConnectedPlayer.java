@@ -4,9 +4,9 @@ import java.io.DataOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.util.Arrays;
 class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	OutputStream out;
 	InputStream in;
@@ -86,11 +86,31 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			}
 			MessageDigest shs = MessageDigest.getInstance("SHA-256");
 			nonce = shs.digest(toh);
+			System.out.println();
+			/*char[] chras = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+			for (byte n : toh) {
+				System.out.print(chras[(n >>> 4) & 0xf]);
+				System.out.print(chras[n & 0xf]);
+				System.out.print(',');
+			}
+			System.out.println();
+			for (byte n : nonce) {
+				System.out.print(chras[(n >>> 4) & 0xf]);
+				System.out.print(chras[n & 0xf]);
+				System.out.print(',');
+			}
+			System.out.println();
+			for (byte n : secret) {
+				System.out.print(chras[(n >>> 4) & 0xf]);
+				System.out.print(chras[n & 0xf]);
+				System.out.print(',');
+			}
+			System.out.println();
 			if (!Arrays.equals(nonce, claim)) {
 				out.write(0x55);
 				return;
 			}
-			out.write(0x63);
+			*/out.write(0x63);
 		}
 		catch (Exception E) {
 			System.out.println("A connecting user failed to be authenticated due to an Exception having occurred: " + E);
@@ -102,7 +122,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		if (clientVersion < Server.version) {
 			out.write(0x55);
 			dOut.writeInt(32);
-			out.write("Outdated client!".getBytes("UTF-16BE"));
+			out.write("Outdated client!".getBytes(StandardCharsets.UTF_16BE));
 			alive = false;
 			Server.level.ent[EID] = null;
 			socket.close();
@@ -111,7 +131,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		if (Server.level.entities.containsKey((((long) Server.level.spawnX) << 32) | ((long) Server.level.spawnY))) {
 			out.write(0x55);
 			dOut.writeInt(28);
-			out.write("Spawn blocked!".getBytes("UTF-16BE"));
+			out.write("Spawn blocked!".getBytes(StandardCharsets.UTF_16BE));
 			alive = false;
 			Server.level.ent[EID] = null;
 			socket.close();
@@ -123,11 +143,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		Server.level.entities.put((((long) Server.level.ent[EID].x) << 32) | ((long) Server.level.ent[EID].y), EID);
 		Server.buf.put((byte) 6).put((byte) 2).putInt(Server.level.ent[EID].x).putInt(Server.level.ent[EID].y).putLong(Server.level.ent[EID].data).putShort(Server.level.ent[EID].health);
 		System.out.println("A client has connected: " + socket);
-		{
-			byte[] initial = Server.level.toBytes();
-			dOut.writeInt(initial.length);//TODO Use gzip
-			out.write(initial);
-		}//Extra scope to allow initial to be cleaned up by the garbage collector earlier
+		Server.level.serialize(dOut);//TODO Use gzip
 		dOut.writeShort(Server.turnInterval);
 		dOut.writeInt(Server.level.ent[EID].x);//TODO Prevent lag due to blocking writes
 		dOut.writeInt(Server.level.ent[EID].y);//TODO Prevent lag due to blocking writes

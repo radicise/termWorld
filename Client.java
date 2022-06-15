@@ -91,20 +91,19 @@ public class Client {
 	}
 	public static void main(String[] arg) throws Exception {
 		System.out.println("termWorld v" + Server.versionString);
-		{
-			String[] ipD = arg[3].split(":");
-			Server.port = Integer.parseInt(ipD[1]);
-			ipD = ipD[0].split("\\.");
-			for (int q = 0; q < 4; q++) {
-				IPv4Host[q] = (byte) (Integer.parseInt(ipD[q]));
-			}
-			ipD = arg[4].split(":");
-			authPort = Integer.parseInt(ipD[1]);
-			ipD = ipD[0].split("\\.");
-			for (int q = 0; q < 4; q++) {
-				authIPv4Host[q] = (byte) (Integer.parseInt(ipD[q]));
-			}
+		String[] ipD = arg[3].split(":");
+		Server.port = Integer.parseInt(ipD[1]);
+		ipD = ipD[0].split("\\.");
+		for (int q = 0; q < 4; q++) {
+			IPv4Host[q] = (byte) (Integer.parseInt(ipD[q]));
 		}
+		ipD = arg[4].split(":");
+		authPort = Integer.parseInt(ipD[1]);
+		ipD = ipD[0].split("\\.");
+		for (int q = 0; q < 4; q++) {
+			authIPv4Host[q] = (byte) (Integer.parseInt(ipD[q]));
+		}
+		ipD = new String[]{arg[3], arg[4]};
 		Socket socket = null;
 		try {
 			socket = new Socket(InetAddress.getByAddress(IPv4Host), Server.port);
@@ -122,7 +121,7 @@ public class Client {
 			arg[0] = "guest";
 			arg[1] = "password";
 			arg[2] = "5";
-			*/UID = Long.valueOf(arg[2]);
+			*/UID = Long.parseLong(arg[2], 16);
 			byte[] name = arg[0].getBytes(StandardCharsets.UTF_16BE);
 			if (name.length > 32) {
 				socket.close();
@@ -208,7 +207,7 @@ public class Client {
 		if (in.read() == 0x55) {
 			byte[] msg = new byte[dIn.readInt()];
 			in.read(msg);
-			System.out.println("Disconnected with reason: " + (new String(msg, "UTF-16BE")));//TODO Prevent message spoofing
+			System.out.println("Disconnected with reason: " + (new String(msg, StandardCharsets.UTF_16BE)));//TODO Prevent message spoofing
 			socket.close();
 			return;
 		}
@@ -224,9 +223,7 @@ public class Client {
 					}
 				}
 			}.start();
-			byte[] levelBytes = new byte[dIn.readInt()];
-			in.read(levelBytes);
-			Server.level = Level.fromBytes(levelBytes);
+			Server.level = Level.deserialize(dIn);
 			byte b;
 			int i;
 			turnInterval = dIn.readShort();
@@ -298,6 +295,23 @@ public class Client {
 				Text.buffered.write('[');
 				Text.buffered.write(Text.tiles[Server.level.terrain.tiles[(Server.level.ent[EID].y * Server.level.terrain.width) + Server.level.ent[EID].x]]);
 				Text.buffered.write(']');
+				Text.buffered.write('{');
+				for (int p = 0; p < (Server.level.ent[EID].inventory.length - 1); p++) {
+					if (Server.level.ent[EID].inventory[p] == null) {
+						Text.buffered.write(' ');
+					}
+					else {
+						Text.buffered.write(Server.level.ent[EID].inventory[p].thing.face);
+					}
+					Text.buffered.write(',');
+				}
+				if (Server.level.ent[EID].inventory[Server.level.ent[EID].inventory.length - 1] == null) {
+					Text.buffered.write(' ');
+				}
+				else {
+					Text.buffered.write(Server.level.ent[EID].inventory[Server.level.ent[EID].inventory.length - 1].thing.face);
+				}
+				Text.buffered.write('}');
 				Text.buffered.write('(');
 				Text.buffered.write(Integer.toString(Server.level.ent[EID].x));
 				Text.buffered.write(',');

@@ -1,9 +1,13 @@
 package termWorld;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 class Dog extends Entity {
+	static final int invSpace = 2;
+	final byte type = 1;
 	boolean healed;
 	Dog(int x, int y, long data, short health) {
+		inventory = new Item[invSpace];
 		face = 'd';
-		type = 1;
 		this.x = x;
 		this.y = y;
 		xO = x;
@@ -14,6 +18,16 @@ class Dog extends Entity {
 		if ((color == 0) || (color == 7) || (color == 8) || (color == 15)) {
 			color = 9;
 		}
+	}
+	void toDataStream(DataOutputStream dataOut) throws Exception {//TODO Include face value
+		dataOut.write(type);
+		dataOut.writeInt(x);
+		dataOut.writeInt(y);
+		dataOut.writeLong(data);
+		dataOut.writeShort(health);
+	}
+	static Dog fromDataStream(DataInputStream readFrom) throws Exception {
+		return new Dog(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort());
 	}
 	void animate(int EID) {
 		if (checkDeath(EID)) {

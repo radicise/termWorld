@@ -1,9 +1,13 @@
 package termWorld;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 class EntityPlayer extends Entity {
+	static final int invSpace = 15;
+	final byte type = 2;
 	int p;
 	EntityPlayer(int x, int y, long data, short health) {
+		inventory = new Item[invSpace];
 		face = '\u263a';
-		type = 2;
 		this.x = x;
 		this.y = y;
 		xO = x;
@@ -14,6 +18,43 @@ class EntityPlayer extends Entity {
 		if ((color == 0) || (color == 7) || (color == 8) || (color == 15)) {
 			color = 9;
 		}
+	}
+	EntityPlayer(int x, int y, long data, short health, Item[] inv) {
+		inventory = new Item[invSpace];
+		System.arraycopy(inv, 0, inventory, 0, Math.min(invSpace, inv.length));
+		face = '\u263a';
+		this.x = x;
+		this.y = y;
+		xO = x;
+		yO = y;
+		this.data = data;
+		this.health = health;
+		color = (byte) ((data >>> 6) & 0xf);
+		if ((color == 0) || (color == 7) || (color == 8) || (color == 15)) {
+			color = 9;
+		}
+	}
+	void toDataStream(DataOutputStream dataOut) throws Exception {//TODO Include face value
+		dataOut.write(type);
+		dataOut.writeInt(inventory.length);
+		for (Item I : inventory) {
+			if (I == null) {
+				dataOut.write(0);
+				continue;
+			}
+			I.serialize(dataOut);
+		}
+		dataOut.writeInt(x);
+		dataOut.writeInt(y);
+		dataOut.writeLong(data);
+		dataOut.writeShort(health);
+	}
+	static EntityPlayer fromDataStream(DataInputStream readFrom) throws Exception {
+		Item[] inv = new Item[readFrom.readInt()];
+		for (int n = 0; n < inv.length; n++) {
+			inv[n] = Item.deserialize(readFrom);
+		}
+		return new EntityPlayer(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort(), inv);
 	}
 	boolean checkDeath(int EID) {
 		if (data < 0) {

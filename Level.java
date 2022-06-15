@@ -1,7 +1,6 @@
 package termWorld;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.Arrays;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.Random;
 import java.util.TreeMap;
 class Level {
@@ -30,46 +29,35 @@ class Level {
 			dispFaces.put((L >>> 32) ^ (L << 32), I);
 		});
 	}
-	synchronized byte[] toBytes() {
-		ByteBuffer data = ByteBuffer.allocate(terrain.width * terrain.height + extension + (entities.size() * bytesPerEntity)).order(ByteOrder.BIG_ENDIAN);
-		data.putInt(VID).putInt(terrain.width).putInt(terrain.height).putInt(ent.length).put(terrain.tiles).putLong(age).putInt(spawnX).putInt(spawnY).putInt(entities.size());
-		entities.forEach((Long L, Integer I) -> {
-			data.put(ent[I].type).putInt(ent[I].x).putInt(ent[I].y).putLong(ent[I].data).putShort(ent[I].health);
-		});
-		byte[] result = new byte[terrain.width * terrain.height + extension + (entities.size() * bytesPerEntity)];
-		data.rewind();
-		data.get(result);
-		return result;
+	synchronized void serialize(DataOutputStream strm) throws Exception {
+		strm.writeInt(VID);
+		strm.writeInt(terrain.width);
+		strm.writeInt(terrain.height);
+		strm.writeInt(ent.length);
+		strm.write(terrain.tiles);
+		strm.writeLong(age);
+		strm.writeInt(spawnX);
+		strm.writeInt(spawnY);
+		strm.writeInt(entities.size());
+		for (Integer I : entities.values()) {
+			ent[I].serialize(strm);
+		}
 	}
-	static Level fromBytes(byte[] data) {
-		int VID = (((((data[0] & 0xff) << 8) | (data[1] & 0xff) << 8) | (data[2] & 0xff)) << 8) | (data[3] & 0xff);
-		int width = (((((data[4] & 0xff) << 8) | (data[5] & 0xff) << 8) | (data[6] & 0xff)) << 8) | (data[7] & 0xff);
-		int height = (((((data[8] & 0xff) << 8) | (data[9] & 0xff) << 8) | (data[10] & 0xff)) << 8) | (data[11] & 0xff);
+	static Level deserialize(DataInputStream strm) throws Exception {
+		int VID = strm.readInt();
+		int width = strm.readInt();
+		int height = strm.readInt();
 		int marker = width * height;
-		Entity[] ent = new Entity[(((((data[12] & 0xff) << 8) | (data[13] & 0xff) << 8) | (data[14] & 0xff)) << 8) | (data[15] & 0xff)];
-		byte[] tiles = Arrays.copyOfRange(data, 16, marker + 16);
-		ByteBuffer readFrom = ByteBuffer.wrap(Arrays.copyOfRange(data, marker + 16, data.length)).order(ByteOrder.BIG_ENDIAN);
-		long age = readFrom.getLong();
-		int spawnX = readFrom.getInt();
-		int spawnY = readFrom.getInt();
+		Entity[] ent = new Entity[strm.readInt()];
+		byte[] tiles = new byte[marker];
+		strm.read(tiles);
+		long age = strm.readLong();
+		int spawnX = strm.readInt();
+		int spawnY = strm.readInt();
 		TreeMap<Long, Integer> entities = new TreeMap<Long, Integer>();
-		int numEntities = readFrom.getInt();
-		byte type;
+		int numEntities = strm.readInt();
 		for (int i = 0; i < numEntities; i++) {
-			type = readFrom.get();
-			switch (type) {//UIC
-				case(0):
-					ent[i] = new Entity(readFrom.getInt(), readFrom.getInt(), readFrom.getLong(), readFrom.getShort());
-					break;
-				case(1):
-					ent[i] = new Dog(readFrom.getInt(), readFrom.getInt(), readFrom.getLong(), readFrom.getShort());
-					break;
-				case(2):
-					ent[i] = new EntityPlayer(readFrom.getInt(), readFrom.getInt(), readFrom.getLong(), readFrom.getShort());
-					break;
-				default:
-					ent[i] = new Entity(readFrom.getInt(), readFrom.getInt(), readFrom.getLong(), readFrom.getShort());
-			}
+			ent[i] = Entity.deserialize(strm);
 			entities.put((((long) ent[i].x) << 32) | ((long) ent[i].y), i);
 		}
 		return new Level(new FixedFrame(width, height, tiles), entities, ent, age, VID, spawnX, spawnY);
@@ -154,7 +142,7 @@ class Level {
 				}
 				switch ((r >>> 4) & 0x3f) {
 					case (0):
-						ent[ePlace] = new Dog(i % width, i / width, (r >>> 10) & 0x38f, (short) 10);
+						ent[ePlace] = new Dog(i % width, i / width, (r >>> 10) & 0x1cf, (short) 10);
 						entities.put((((long) (i % width)) << 32) ^ ((long) (i / width)), ePlace);
 						ePlace++;
 						break;
