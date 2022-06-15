@@ -1,68 +1,61 @@
 const net = require("net");
-const { ipcRenderer } = require("electron");
-const { hash } = require("./hash");
-const { read } = require("./block-read");
-
-function log (...data) {
-    ipcRenderer.send("console:log", data.map(v => JSON.stringify(v)));
-}
-
-/**
- * @param {String} msg
- */
-function fatal_err (msg) {
-    ipcRenderer.send("console:fatal", msg);
-}
+const { hash } = require("../hash");
+const { read } = require("../block-read");
+const { formatBuf } = require("../logging");
+const { charsToBuffer, stringToBuffer } = require("../string-to-buf");
+const { log, fatal_err, invoke } = require("../js/common");
 
 /**@type {net.Socket} */
 let serverConnection;
 /**@type {net.Socket} */
 let authConnection;
 
-/**@type {(data:Buffer)=>void} */
-let serveCB = () => {};
-/**@type {(data:Buffer)=>void} */
-let authCB = () => {};
-
 /**
  * authenticates a user
  * @param {Number[]} userName
  * @param {Number[]} password
  * @param {Number[]} clientID
- * @returns {Promise<void>}
+ * @returns {Promise<void|true>}
  */
 async function authenticate (userName, password, clientID) {
-    for (let i = userName.length; i < 32; i ++) {userName.push(0x32);}
-    for (let i = password.length; i < 32; i ++) {password.push(0x32);}
+    // for (let i = userName.length; i < 32; i ++) {userName.push(0x32);}
+    // for (let i = password.length; i < 32; i ++) {password.push(0x32);}
     // userName = userName.pa;
     // password = password.fill(0x20, password.length, 32);
     // userName = Buffer.alloc(32);
     const server = serverConnection;
     const auth = authConnection;
     function server_write (data) {
+        if (Buffer.isBuffer(data)) {server.write(data);return;}
         if (!Array.isArray(data)) {data = [data];}
         server.write(Buffer.from(data));
     }
     function auth_write (data) {
+        if (Buffer.isBuffer(data)) {auth.write(data);return;}
         if (!Array.isArray(data)) {data = [data];}
         auth.write(Buffer.from(data));
     }
     server_write(userName);
+    log('after init write');
     let buf = [];
     buf = await read(server, 40);
-    log(buf);
+    log(formatBuf(buf));
     const nonce0 = buf.slice(0, 32);
     const serverID = buf.slice(32, 40);
     auth_write([0x63, ...clientID]);
     buf = await read(auth, 1);
-    log(asHex(buf));
+    // log(formatBuf(buf));
     if (buf[0] === 0x55) {
         return;
     }
     buf = await read(auth, 32);
-    log(asHex(buf));
+    log(formatBuf(buf));
     const nonce1 = buf;
-    auth_write([...serverID, ...nonce0, ...hash([...password, ...nonce1, ...clientID])]);
+    const sec = [...serverID, ...nonce0, ...hash([...hash([...password, ...clientID]), ...nonce1, ...clientID])];
+    log(`password: ${formatBuf(password)}`);
+    log(`hash1: ${formatBuf(hash([...password, ...clientID]))}\nnonce1: ${formatBuf(nonce1)}\nclientID: ${formatBuf(clientID)}`);
+    log(formatBuf(sec));
+    auth_write(sec);
     buf = await read(auth, 1);
     // console.log(asHex(buf)[0]);
     if (buf[0] == 0x55) {
@@ -75,7 +68,7 @@ async function authenticate (userName, password, clientID) {
         return;
     }
     buf = await read(auth, 32);
-    log(buf);
+    log(formatBuf(buf));
     const authHash = buf;
     server_write([...userName, ...clientID, ...authHash]);
     buf = await read(server, 1);
@@ -84,11 +77,12 @@ async function authenticate (userName, password, clientID) {
         return;
     }
     log("authenticated");
+    return true;
 }
 
 async function main () {
     /**@type {String[]} */
-    const argv = await ipcRenderer.invoke("request:args");
+    const argv = await invoke("request:args");
 
     // log(argv);
 
@@ -96,25 +90,37 @@ async function main () {
         fatal_err("insufficent args");
         return;
     }
-    const username = argv[2].split("").map(v => v.charCodeAt(0));
-    const password = argv[3].split("").map(v => v.charCodeAt(0));
-    const dthconv = "0123456789abcdef";
-    const pfuncA0001 = (s) => {
-        s = s.padEnd(16, "0");
-        let f = [];
-        for (let i = 0; i < s.length; i += 2) {
-            n = s[i] + s[i+1];
-            f.push(dthconv.indexOf(n[0]) << 4 | dthconv.indexOf(n[1]));
-        }
-        return f;
-    };
-    const userid = pfuncA0001(argv[4]);
+    // try{
+    let username = Buffer.alloc(32, 0x20);
+    stringToBuffer(argv[2]).copy(username);
+    // username.write(argv[2]);
+    username = Array.from(username);
+    let password = Buffer.alloc(32, 0x20);
+    stringToBuffer(argv[3]).copy(password);
+    // password.write(argv[3]);
+    password = Array.from(password);
+    const userid = Array.from(charsToBuffer(argv[4]));
+    log(formatBuf(username));
+    log(formatBuf(password));
+    log(formatBuf(userid));
+    // } catch (e) {log(e.toString(), e.stack.toString());}
+    // const dthconv = "0123456789abcdef";
+    // const pfuncA0001 = (s) => {
+    //     s = s.padEnd(16, "0");
+    //     let f = [];
+    //     for (let i = 0; i < s.length; i += 2) {
+    //         n = s[i] + s[i+1];
+    //         f.push(dthconv.indexOf(n[0]) << 4 | dthconv.indexOf(n[1]));
+    //     }
+    //     return f;
+    // };
+    // const userid = pfuncA0001(argv[4]);
     if (username.length > 32) {log("name too long");return;}
     if (password.length > 32) {log("password too long");return;}
     if (userid.length !== 8) {log("invalid userid");return;}
-    const servePort = Number(argv[5].slice(argv[5].indexOf(":")+1)) || 5000;
+    const servePort = Number(argv[5].slice(argv[5].indexOf(":")+1)) || 15651;
     const serveHost = argv[5].slice(0,argv[5].indexOf(":")) || "127.0.0.1";
-    const authPort = Number(argv[6].slice(argv[6].indexOf(":")+1)) || 4000;
+    const authPort = Number(argv[6].slice(argv[6].indexOf(":")+1)) || 15652;
     const authHost = argv[6].slice(0,argv[6].indexOf(":")) || "127.0.0.1";
     log(serveHost, servePort, authHost, authPort);
     // const server = net.createServer((c) => {
@@ -128,16 +134,21 @@ async function main () {
             // setTimeout(res, 200);
         });
     });
-    serverConnection.on("data", serveCB);
+    serverConnection.pause();
+    // serverConnection.on("data", serveCB);
     authConnection = new net.Socket();
     await new Promise((res, _) => {
         authConnection.connect(authPort, authHost, () => {
             res();
         });
     });
-    authConnection.on("data", authCB);
+    authConnection.pause();
+    // authConnection.on("data", authCB);
     log("after connection");
-    await authenticate(username, password, userid);
+    if (!(await authenticate(username, password, userid))) {
+        authConnection.end();
+        serverConnection.end();
+    }
     // serverConnection.connect(servePort, serveHost, () => {
     //     serverConnection.write("data");
     // });

@@ -4,6 +4,7 @@ const { hash } = require("./hash");
 const { stringToBuffer } = require("./string-to-buf");
 const { publicEncrypt, privateDecrypt, createPublicKey } = require("crypto");
 const { generateKeyPair, symmetricEncrypt, symmetricDecrypt } = require("./keygen");
+const { formatBuf } = require("./logging");
 
 let [publicKey, privateKey] = generateKeyPair();
 
@@ -11,22 +12,22 @@ const clientID = Array.from(Buffer.alloc(8, 0));
 const userName = Array.from(Buffer.alloc(32, 0));
 const password = Array.from(Buffer.alloc(32, 0));
 
-const port = [5000, 4000];
+const port = [15651, 15652];
 const host = ["127.0.0.1", "127.0.0.1"];
 
-let c = 0;
+let c = 1;
 
 let auth = new net.Socket();
-let server = new net.Socket();
+// let server = new net.Socket();
 
 const cv = "0123456789abcdef";
 const asHex = (a) => a.map(v => cv[v >> 4] + cv[v & 0x0f]);
 
 auth.pause();
-server.pause();
+// server.pause();
 
 auth.connect(port[1], host[1], () => {if(c){start();}c=1;});
-server.connect(port[0], host[0], () => {if(c){start();}c=1;});
+// server.connect(port[0], host[0], () => {if(c){start();}c=1;});
 
 function server_write (data) {
     if (!Array.isArray(data)) {
@@ -43,6 +44,31 @@ function auth_write (data) {
 }
 
 async function start () {
+    auth_write([0x33, 1, 0, 0, 0, 0, 0, 0, 1]);
+    if ((await read(auth, 1))[0] === 0x55) {
+        console.log("server not exist");
+        return;
+    }
+    const nonce0 = await read(auth, 32);
+    auth.write(Buffer.from(hash(Buffer.concat([Buffer.from(hash(Buffer.concat([stringToBuffer("password"), Buffer.from([1,0,0,0,0,0,0,1])]))), Buffer.from(nonce0)]))));
+    if ((await read(auth, 1))[0] === 0x55) {
+        console.log("invalid server login");
+        return;
+    }
+    let buf = await read(auth, 2);
+    buf = await read(auth, buf[0] << 8 | buf[1]);
+    const pubkey = createPublicKey(Buffer.from(buf).toString("utf-8"));
+    const enc = publicEncrypt(pubkey, Buffer.from([0x00, 0xff]));
+    auth_write([(enc.length & 0xff00) >> 8, enc.length & 0xff]);
+    auth.write(enc);
+    if ((await read(auth, 1))[0] === 0x55) {
+        console.log("failed");
+        return;
+    }
+    console.log("success");
+}
+
+async function start3 () {
     auth_write([0x32, 0x00]);
     let buf = await read(auth, 2);
     console.log(buf);

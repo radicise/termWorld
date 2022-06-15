@@ -1,0 +1,33 @@
+keys are 32 bytes
+
+js code example:
+
+note that buffers are arrays of unsigned bytes
+
+the hash algorithm used is SHA-256
+
+class Implementation {
+    constructor (KEY : Buffer) {
+        this.key : Buffer = KEY;
+        this.key_position : Number = 0;
+    }
+    regenerate_key () {
+        this.key_position = 0;
+        this.key = hash(this.key);
+    }
+    crypt (data : Buffer) {
+        output : Number[] = [];
+        for (let i = 0; i < data.length; i ++) {
+            if this.key_position >= 32 {
+                this.regenerate_key();
+            }
+            let out_byte : Number = 0;
+            // operate on current byte
+            for (let j = 0; j < 8; j ++) {
+                out_byte = out_byte | ((data[i] & (1 << j)) ^ (this.key[this.key_position] & (1 << j)));
+            }
+            this.key_position ++;
+        }
+        return Buffer.from(output);
+    }
+}

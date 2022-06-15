@@ -1,0 +1,29 @@
+*[hidden] {
+    display : none !important;
+}
+
+* {
+    color : #ddd;
+}
+
+body {
+    background-color : #444;
+}
+
+input[type="button"] {
+    background-color : #666;
+    outline : #aaa;
+    border-color : #222;
+    border-radius : 4px;
+    color : #ddd;
+}
+
+input[type="button"]:hover {
+    background-color : #555;
+    color : #ccc;
+}
+
+input[type="button"]:active {
+    background-color : #111;
+    color : #aaa;
+}

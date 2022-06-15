@@ -1,0 +1,39 @@
+div#server-cont {
+    position : absolute;
+    left : 50vw;
+    top : 10vh;
+    width : 50vw;
+    height : 60vh;
+    transform : translate(-50%, 0%);
+    display : flex;
+    flex-direction : column;
+    border : solid 2px lime;
+}
+
+div#server-cont > * {
+    width : inherit;
+    height : 6vh;
+}
+
+div#server-cont > * > .server-icon {
+    position : absolute;
+    left : 0px;
+    top : 0px;
+    width : 6vh;
+    height : 6vh;
+}
+
+div#server-cont > * > *.server-info {
+    position : absolute;
+    left : 6vh;
+    top : 0vh;
+    height : 3vh;
+    /* text-align: center; */
+    transform : translate(0%, 50%);
+    text-anchor: middle;
+    width : calc(50vw - 6vh);
+    /* align-content: center; */
+    /* vertical-align : bottom; */
+    /* padding-top : 2px; */
+    padding-left : 20px;
+}
