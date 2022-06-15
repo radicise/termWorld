@@ -7,7 +7,7 @@ byte: Octet
 X-coordinate: amount of tiles right starting from 0 at leftmost
 Y-coordinate, amount of tiles down starting from 0 at topmost
 
-Hpasswords are hashes of the accountID and account password
+Hpasswords are hashes of the accountID and account password where password is before id
 
 colorID = (data >>> 6) & 0xf
 
