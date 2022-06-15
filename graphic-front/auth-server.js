@@ -54,7 +54,7 @@ let userIdDb = {
 };
 
 let serverIdDb = {
-    "0000000000000001" : Buffer.from([0x58, 0xe0, 0xd3, 0x14, 0x41, 0xd0, 0xe6, 0x6e, 0x8b, 0xa4, 0xf1, 0xd3, 0x4b, 0xc6, 0x46, 0x76, 0x10, 0xa7, 0x2f, 0x22, 0xbd, 0x04, 0x53, 0x2b, 0xf1, 0x8f, 0x0b, 0xb3, 0x35, 0xac, 0x72, 0xb0]),
+    "0000000000000001" : ["password", Buffer.from([0x58, 0xe0, 0xd3, 0x14, 0x41, 0xd0, 0xe6, 0x6e, 0x8b, 0xa4, 0xf1, 0xd3, 0x4b, 0xc6, 0x46, 0x76, 0x10, 0xa7, 0x2f, 0x22, 0xbd, 0x04, 0x53, 0x2b, 0xf1, 0x8f, 0x0b, 0xb3, 0x35, 0xac, 0x72, 0xb0])],
 }
 
 const c = "0123456789abcdef";
@@ -102,9 +102,11 @@ const server = net.createServer(async (socket) => {
     if (socket.remoteAddress in banish) {
         return;
     }
-    function failed () {
-        banish[socket.remoteAddress] = 30;
-        logger.mkLog(`${usingID} was banished`);
+    function failed (nb) {
+        if (!nb) {
+            banish[socket.remoteAddress] = 30;
+            logger.mkLog(`${usingID} was banished`);
+        }
         write(0x55);
         socket.end();
     }
@@ -225,6 +227,34 @@ const server = net.createServer(async (socket) => {
             if (breakout) break;
         }
         console.log("exited");
+    } else if (buf[0] === 0x33) {
+        const SID = await read(socket, 8);
+        logger.mkLog(`${usingID} has identified as server "${SID}" with op for server secret update`);
+        if (!(reduceToHex(SID) in serverIdDb)) {
+            mkLog(`SERVER SECRET ${usingID} - server id not found`);
+            failed(true);
+            return;
+        }
+        write(0x63);
+        const nonce0 = randomBytes(32);
+        socket.write(nonce0);
+        logger.mkLog(`SERVER SECRET ${usingID} - generated nonce`);
+        buf = await read(socket, 32);
+        if (hash(Buffer.concat([serverIdDb[reduceToHex(SID)][0], nonce0])).some((v, i) => v !== buf[i])) {
+            logger.mkLog(`SERVER SECRET ${usingID} - failed to authenticate server`)
+            failed(true);
+            return;
+        }
+        write(0x63);
+        const exp = stringToBuffer(publicKey.export({format:"pem",type:"spki"}));
+        write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
+        socket.write(exp);
+        buf = await read(socket, 2);
+        buf = await read(socket, buf[0] << 8 | buf[1]);
+        const sec = privateDecrypt(privateKey, buf);
+        serverIdDb[reduceToHex(SID)][1] = sec;
+        write(0x63);
+        logger.mkLog(`SERVER SECRET ${usingID} - updated server secret successfully`);
     }
     socket.end();
 }).listen(Number(argv[2]) || 15652);

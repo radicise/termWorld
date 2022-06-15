@@ -7,6 +7,8 @@ byte: Octet
 X-coordinate: amount of tiles right starting from 0 at leftmost
 Y-coordinate, amount of tiles down starting from 0 at topmost
 
+Hpasswords are hashes of the accountID and account password
+
 colorID = (data >>> 6) & 0xf
 
 
@@ -35,7 +37,7 @@ Server -> Client: <nonce0> + <serverID>
 Client -> Auth: 0x63 + <userID>
 Auth -> Client: 0x63 for acceptance, 0x55 for rejection due to userID not existing at the authentication server
 Auth -> Client: <nonce1>
-Client -> Auth: <serverID> + <nonce0> + hash(<password> + <nonce1> + <userID>)
+Client -> Auth: <serverID> + <nonce0> + hash(<Hpassword> + <nonce1> + <userID>)
 Auth -> Client: 0x63 for acceptance, 0x55 for rejection due to the player's secret key not being verified
 Auth -> Client: 0x63 for acceptance, 0x55 for rejection due to the target server not being registered with the authentication server
 Auth -> Client: hash(<username> + <nonce0> + <server>.<currentSecret> + <userID>)
@@ -130,10 +132,10 @@ Host To Auth Server Secrets:
 Host -> Auth: 0x33 + <server id>
 Auth -> Host: 0x63 on success, 0x55 if server id doesn't exist
 Auth -> Host: nonce0
-Host -> Auth: hash(<server password> + nonce0)
+Host -> Auth: hash(<Hserver password> + nonce0)
 Auth -> Host: 0x63 on success, 0x55 on reject
 Auth -> Host: <public length> + <public key>
-Host -> Auth: encrypt(<new server secret>)
+Host -> Auth: <encrypt length> + encrypt(<new server secret>)
 Auth -> Host: 0x63 on success, 0x55 in the event of failure
 
 Auth Server Password Exchange:
