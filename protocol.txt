@@ -54,7 +54,7 @@ S -> C
 byte, signifies if the server will accept the player. 0x63 is acceptance, 0x55 is rejection; if rejected, an int value containing the length of the rejection message in bytes is sent and then followed by the message itself, text in big-endian UTF-16; rejected players must then disconnect
 
 S -> C
-int, the length of the serialized level data in bytes, followed by the serialized level data;
+The serialized level data;
 Serialized level data format:
         int, version ID
         int, level width, in tiles
@@ -67,6 +67,12 @@ Serialized level data format:
         int, amount of serialized entities, followed by the serialized data for each entity
         Serialized entity data format:
                 byte, entity type; 0 = Entity, 1 = Dog, 2 = EntityPlayer
+                IF IT IS AN EntityPlayer:
+                        int, inventory size
+                        for each inventory slot, the serialized data for the Item is provided, in order from slot 1 to the highest slot;
+                        Serialized item data format:
+                                byte, quantity; IF THIS IS 0x00 THEN THE Item IS NULL AND NO MORE READING IS PERFORMED
+                                byte, thingID; 0 = cloth patch, 1 = water bottle, 2 = stone
                 int, X-coordinate
                 int, Y-coordinate
                 long, raw data available to the entity
