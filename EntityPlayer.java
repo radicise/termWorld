@@ -3,9 +3,9 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 class EntityPlayer extends Entity {
 	static final int invSpace = 15;
-	final byte type = 2;
 	int p;
 	EntityPlayer(int x, int y, long data, short health) {
+		type = 2;
 		inventory = new Item[invSpace];
 		face = '\u263a';
 		this.x = x;
@@ -34,7 +34,7 @@ class EntityPlayer extends Entity {
 			color = 9;
 		}
 	}
-	void toDataStream(DataOutputStream dataOut) throws Exception {//TODO Include face value
+	void serialize(DataOutputStream dataOut) throws Exception {//TODO Include face value
 		dataOut.write(type);
 		dataOut.writeInt(inventory.length);
 		for (Item I : inventory) {
@@ -65,7 +65,7 @@ class EntityPlayer extends Entity {
 		}
 		return false;
 	}
-	synchronized void animate(int EID) {
+	synchronized void animate(int EID)  throws Exception {
 		if (checkDeath(EID)) {
 			return;
 		}

@@ -166,14 +166,34 @@ public class Client {
 			}
 			Arrays.fill(pwB, (byte) 32);
 			System.arraycopy(pw, 0, pwB, 0, pw.length);
-			Arrays.fill(pw, (byte) 0);
+			byte[] pHpw = new byte[40];
+			System.arraycopy(pwB, 0, pHpw, 0, 32);
+			for (int i = 0; i < 8; i++) {
+				pHpw[39 - i] = (byte) (UID >>> (i * 8));
+			}
+			/*char[] chras = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+			for (byte n : pHpw) {
+				System.out.print(chras[(n >>> 4) & 0xf]);
+				System.out.print(chras[n & 0xf]);
+				System.out.print(',');
+			}
+			System.out.println();
+			*/Arrays.fill(pwB, (byte) 0);
+			MessageDigest shs = MessageDigest.getInstance("SHA-256");
+			pwB = shs.digest(pHpw);
+			/*for (byte n : pwB) {
+				System.out.print(chras[(n >>> 4) & 0xf]);
+				System.out.print(chras[n & 0xf]);
+				System.out.print(',');
+			}
+			System.out.println();
+			*/Arrays.fill(pw, (byte) 0);
 			byte[] toh = new byte[72];
 			System.arraycopy(pwB, 0, toh, 0, 32);
 			System.arraycopy(nonce1, 0, toh, 32, 32);
 			for (int i = 0; i < 8; i++) {
 				toh[71 - i] = (byte) (UID >>> (i * 8));
 			}
-			MessageDigest shs = MessageDigest.getInstance("SHA-256");
 			aut.write(shs.digest(toh));
 			if (an.read() != 0x63) {
 				System.out.println("Authentication failure: Secret key was not verified");
@@ -197,6 +217,7 @@ public class Client {
 				socket.close();
 				System.exit(12);
 			}
+			Arrays.fill(pHpw, (byte) 0);
 			Arrays.fill(pwB, (byte) 0);
 			arg[1] = null;
 		}//Extra scope for security and garbage collection purposes
@@ -248,6 +269,12 @@ public class Client {
 							Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) ^ ((long) Server.level.ent[i].x), i);
 							Server.level.entities.put((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y), i);
 						}
+						if ((b & 8) == 8) {
+							Server.level.ent[i].health = dIn.readShort();
+						}
+						if ((b & 16) ==  16) {
+							Server.level.ent[i].inventory[dIn.readInt()] = Item.deserialize(dIn);
+						}
 					}
 					else if (b == 3) {
 						mB = new byte[dIn.readInt()];
@@ -260,24 +287,12 @@ public class Client {
 					}
 					else if (b == 6) {
 						i = Server.level.nextSlot();
-						switch (in.read()) {//UIL
-							case(0):
-								Server.level.ent[i] = new Entity(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
-								break;
-							case(1):
-								Server.level.ent[i] = new Dog(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
-								break;
-							case(2):
-								Server.level.ent[i] = new EntityPlayer(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
-								if (notFound) {
-									if (oID == ((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y))) {
-										EID = i;
-										notFound = false;
-									}
-								}
-								break;
-							default:
-								Server.level.ent[i] = new Entity(dIn.readInt(), dIn.readInt(), dIn.readLong(), dIn.readShort());
+						Server.level.ent[i] = Entity.deserialize(dIn);
+						if (notFound) {//TODO Make this better
+							if (oID == ((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y))) {
+								EID = i;
+								notFound = false;
+							}
 						}
 						Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) | ((long) Server.level.ent[i].x), i);
 						Server.level.entities.put((((long) Server.level.ent[i].x) << 32) | ((long) Server.level.ent[i].y), i);
@@ -302,6 +317,8 @@ public class Client {
 					}
 					else {
 						Text.buffered.write(Server.level.ent[EID].inventory[p].thing.face);
+						Text.buffered.write('x');
+						Text.buffered.write(Integer.toString(Server.level.ent[EID].inventory[p].quantity));
 					}
 					Text.buffered.write(',');
 				}
@@ -310,6 +327,8 @@ public class Client {
 				}
 				else {
 					Text.buffered.write(Server.level.ent[EID].inventory[Server.level.ent[EID].inventory.length - 1].thing.face);
+					Text.buffered.write('x');
+					Text.buffered.write(Integer.toString(Server.level.ent[EID].inventory[Server.level.ent[EID].inventory.length - 1].quantity));
 				}
 				Text.buffered.write('}');
 				Text.buffered.write('(');

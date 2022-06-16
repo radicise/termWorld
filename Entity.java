@@ -7,7 +7,7 @@ class Entity {
 	int y;
 	short health;
 	volatile long data;
-	final byte type = 0;
+	byte type = 0;
 	char face;
 	byte color;
 	int xO;
@@ -27,27 +27,12 @@ class Entity {
 		this.health = health;
 		color = 16;
 	}
-	void toDataStream(DataOutputStream dataOut) throws Exception {//TODO Include face value
+	void serialize(DataOutputStream dataOut) throws Exception {//TODO Include face value
 		dataOut.write(type);
 		dataOut.writeInt(x);
 		dataOut.writeInt(y);
 		dataOut.writeLong(data);
 		dataOut.writeShort(health);
-	}
-	void serialize(DataOutputStream strm) throws Exception {
-		switch (type) { 
-			case (0):
-				toDataStream(strm);
-				return;
-			case (1):
-				((Dog) this).toDataStream(strm);
-				return;
-			case (2):
-				((EntityPlayer) this).toDataStream(strm);
-				return;
-			default:
-				throw new InvalidObjectException("Invalid Entity type");
-		}
 	}
 	static Entity fromDataStream(DataInputStream readFrom) throws Exception {
 		return new Entity(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort());
@@ -60,6 +45,8 @@ class Entity {
 				return Dog.fromDataStream(strm);
 			case (2):
 				return EntityPlayer.fromDataStream(strm);
+			case (3):
+				return EntityItem.fromDataStream(strm);
 			default:
 				throw new InvalidObjectException("Invalid Entity type");
 		}
@@ -73,26 +60,48 @@ class Entity {
 		Server.buf.put((byte) 7).putInt(x).putInt(y);
 		return true;
 	}
-	void animate(int EID) {//TODO add client-side health changing as follows:    ,,,,health,teleport,[reserved],face
+	void animate(int EID) throws Exception {//,,,inventory,health,teleport,[reserved],face
 		if (checkDeath(EID)) {
 			return;
 		}
 		face = (face == '\u203c') ? '\u0021' : '\u203c';
 		Server.buf.put((byte) 1).putInt(x).putInt(y).putChar(face);
 	}
-	boolean give(Item given) {
+	int give(Item given) throws Exception {//Only use when Server.buf is safe to write to
+		int n = 0;
+		int g = 0;
 		for (int i = 0; i < inventory.length; i++) {
 			if (inventory[i] == null) {
 				continue;
 			}
 			if (inventory[i].thing == given.thing) {
-				inventory[i].quantity += given.quantity;//TODO prevent overflow
-				return true;
+				n = Math.min(((int) given.quantity) + ((int) inventory[i].quantity), 127);
+				n -= inventory[i].quantity;
+				inventory[i].quantity += n;
+				g += n;
+				if (n != 0) {
+					Server.buf.put((byte) 16).putInt(x).putInt(y).putInt(i);
+					inventory[i].serialize(Server.bstr);
+					given.quantity -=  n;
+					if (given.quantity == 0) {
+						return g;
+					}
+				}
 			}
 		}
-		return false;
+		for (int i = 0; i < inventory.length; i++) {
+			if (inventory[i] == null) {
+				inventory[i] = new Item(given.thing, given.quantity);
+				Server.buf.put((byte) 16).putInt(x).putInt(y).putInt(i);
+				inventory[i].serialize(Server.bstr);
+				g += given.quantity;
+				given.quantity = 0;
+				break;
+			}
+		}
+		return g;
 	}
-	boolean moveBy(int Dx, int Dy, int d) {//Don't move by anything that would move the player out of the bounds of int values if not corrected
+	boolean moveBy(int Dx, int Dy, int d) throws Exception {//Only use when Server.buf is safe to write to, don't move by anything that would move the player out of the bounds of int values if not corrected
 		if (d > 15) {
 			return false;
 		}
@@ -130,7 +139,16 @@ class Entity {
 		}
 		if (Server.level.entities.containsKey((((long) mX) << 32) ^ ((long) mY))) {
 			int n = Server.level.entities.get((((long) mX) << 32) ^ ((long) mY));
+			if (Server.level.ent[n].type == 3) {
+				give(((EntityItem) Server.level.ent[n]).item);
+				if (((EntityItem) Server.level.ent[n]).item.quantity == 0) {
+					Server.level.ent[n].data = -1;
+				}
+			}
 			if (Server.level.ent[n].moveBy(Dx, Dy, d + 1) ? true : (Server.level.ent[n].moveBy(-Dy, Dx, d + 1) ? true : (Server.level.ent[n].moveBy(Dy, -Dx, d + 1) ? true : Server.level.ent[n].moveBy(-(2 * Dx), -(2 * Dy), d + 1)))) {
+				if (Server.level.entities.containsKey((((long) mX) << 32) ^ ((long) mY))) {
+					return false;
+				}
 				int k = Server.level.entities.get((((long) x) << 32) ^ ((long) y));
 				Server.level.entities.remove((((long) x) << 32) ^ ((long) y));
 				Server.level.entities.put((((long) mX) << 32) ^ ((long) mY), k);

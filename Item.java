@@ -20,17 +20,25 @@ public class Item {
 		this.quantity = quantity;
 	}
 	static Item deserialize(DataInputStream strm) throws Exception {
-		byte p;
-		if ((p = ((byte) strm.read())) == 0) {
+		int p;
+		if ((p = strm.read()) == 0) {
 			return null;//null Item instead of Item with null as the thing
 		}
 		if (p == -1) {
 			throw new EOFException();
 		}
-		return new Item(Thing.things[strm.read()], p);
+		if (p == 128) {
+			p = 0;
+		}
+		return new Item(Thing.things[strm.read()], (byte) p);
 	}
 	void serialize(DataOutputStream strm) throws Exception {//write 1 0x00 byte for nulls instead of using this method
-		strm.write(quantity);
+		if (quantity == 0) {
+			strm.write(128);
+		}
+		else {
+			strm.write(quantity);
+		}
 		strm.write(thing.ordinal());
 	}
 }
