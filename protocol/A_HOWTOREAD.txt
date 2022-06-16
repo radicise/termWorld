@@ -1,0 +1,15 @@
+UNLESS OTHERWISE SPECIFIED DATA IS SIGNED USING TWO'S COMPLEMENT
+ALL TEXT is in UTF-16BE, padded with 0x20 until 32 bytes unless otherwise specified
+
+
+The `+' operator denotes the concatenation of multiple terms, the result being the bytes of the LHO followed by those of the RHO
+userID and serverID are long values
+Nonces are 32 bytes
+Hashes are sha-256
+Upon rejection, the client must quit immediately
+
+
+TERMS:
+Host - Server hosting the actual game
+Auth - Authentication server
+Client - User client

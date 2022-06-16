@@ -1,0 +1,13 @@
+for Hosts:
+
+Client -> Host: 0x64
+
+get player counts:
+Client -> Host: 0x01
+Host -> Client: <maximum count 2 byte number>
+Host -> Client: <current count 2 byte number>
+<disconnection>
+
+get authorized authentication servers:
+Client -> Host: 0x02
+Host -> Client: <SERVER SHARING PROTOCOL>
