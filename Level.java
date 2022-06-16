@@ -146,6 +146,13 @@ class Level {
 						entities.put((((long) (i % width)) << 32) ^ ((long) (i / width)), ePlace);
 						ePlace++;
 						break;
+					case (1):
+					case (2):
+					case (3):
+						ent[ePlace] = new EntityItem(i % width, i / width, new Item(Item.Thing.CLOTHPATCH, (byte) 50), (r >>> 10) & 0x1c0);
+						entities.put((((long) (i % width)) << 32) ^ ((long) (i / width)), ePlace);
+						ePlace++;
+						break;
 				}
 			}
 		}

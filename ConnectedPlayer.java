@@ -86,8 +86,8 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			}
 			MessageDigest shs = MessageDigest.getInstance("SHA-256");
 			nonce = shs.digest(toh);
-			System.out.println();
 			/*char[] chras = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+			System.out.println();
 			for (byte n : toh) {
 				System.out.print(chras[(n >>> 4) & 0xf]);
 				System.out.print(chras[n & 0xf]);
@@ -141,7 +141,8 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		Server.Locker.lock();
 		Server.level.ent[EID] = new EntityPlayer(Server.level.spawnX, Server.level.spawnY, (System.currentTimeMillis() << 6) & 0x380, (short) 10);
 		Server.level.entities.put((((long) Server.level.ent[EID].x) << 32) | ((long) Server.level.ent[EID].y), EID);
-		Server.buf.put((byte) 6).put((byte) 2).putInt(Server.level.ent[EID].x).putInt(Server.level.ent[EID].y).putLong(Server.level.ent[EID].data).putShort(Server.level.ent[EID].health);
+		Server.buf.put((byte) 6);
+		Server.level.ent[EID].serialize(Server.bstr);
 		System.out.println("A client has connected: " + socket);
 		Server.level.serialize(dOut);//TODO Use gzip
 		dOut.writeShort(Server.turnInterval);

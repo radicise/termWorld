@@ -3,7 +3,8 @@ package termWorld;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.util.TreeMap;
-*/import java.net.ServerSocket;
+*/import java.io.DataOutputStream;
+import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -22,6 +23,7 @@ public class Server {
 	static ArrayList<ConnectedPlayer> players = new ArrayList<ConnectedPlayer>();
 	static Long playerVal = new Long(0L);
 	static ByteBuffer buf = ByteBuffer.allocate(4096).order(ByteOrder.BIG_ENDIAN);
+	static DataOutputStream bstr;
 	static byte[] bufBytes = buf.array();
 	static long GUSID = 1;//Server ID
 	public static void main(String[] arg) throws Exception {
@@ -35,14 +37,15 @@ public class Server {
 		fileOut.write(testing.toBytes());
 		fileOut.close();
 		System.exit(0);
-		*/try {
-			/*level = Level.fromBytes(Files.readAllBytes(FileSystems.getDefault().getPath(levelname)));*/
+		/**/try {
+			/*level = Level.fromBytes(Files.readAllBytes(FileSystems.getDefault().getPath(levelname)));/**/
 			level = Level.generate(40, 40, 3827L);
 		}
 		catch (Exception E) {
 			System.out.println("An Exception has occurred: " + E);
 			System.exit(1);
 		}
+		bstr = new DataOutputStream(new termWorld.ByteBufferOutputStream(buf));
 		ConnectedPlayer.initRandom();
 		ServerSocket server = new ServerSocket(port);
 		Timer intervallic = new Timer();
@@ -76,6 +79,7 @@ public class Server {
 					}
 					catch (Exception E) {
 						System.out.println("An Exception has occurred: " + E);
+						E.printStackTrace();
 						System.exit(6);
 					}
 					level.age++;
@@ -92,7 +96,6 @@ public class Server {
 			}
 			catch (Exception E) {
 				System.out.println("An Exception has occurred: " + E);
-				E.printStackTrace();
 				server.close();
 				System.exit(3);
 			}

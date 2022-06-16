@@ -13,9 +13,9 @@ import java.util.Arrays;
 import java.util.List;
 /*import java.util.ArrayList;
 import java.io.FileOutputStream;
-*/public class Auth {
-	static List<uAcct> users/* = new ArrayList<uAcct>()*/;
-	static List<sAcct> servers/* = new ArrayList<sAcct>()*/;
+/**/public class Auth {
+	static List<uAcct> users/* = new ArrayList<uAcct>()/**/;
+	static List<sAcct> servers/* = new ArrayList<sAcct>()/**/;
 	static DataInputStream in;
 	static DataOutputStream out;
 	static final int defaultPort = 15652;
@@ -23,8 +23,8 @@ import java.io.FileOutputStream;
 	static private SecureRandom rand;
 	static private byte[] verySecret = new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0};//Arbitrary random value used for seeding of the nonce generator
 	public static void main(String[] args) throws Exception {
-		/*users.add(new uAcct("password\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020".getBytes("UTF-16BE"), "guest\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020".getBytes("UTF-16BE"), 5));
-		servers.add(new sAcct(new byte[]{127, 0, 0, 1}, "testServer\u2020\u2020\u2020\u2020\u2020\u2020".getBytes("UTF-16BE"), new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0}, 1L));
+		/*users.add(new uAcct(new byte[]{0x46, (byte) 0xab, 0x36, (byte) 0x89, (byte) 0x8b, 0x05, (byte) 0x8d, 0x25, 0x64, 0x5a, (byte) 0xc1, (byte) 0xa3, 0x68, 0x03, 0x18, 0x68, 0x46, 0x0e, 0x71, 0x73, 0x1a, (byte) 0xf8, 0x7f, 0x32, 0x4d, (byte) 0x81, 0x09, (byte) 0xc2, 0x02, (byte) 0x86, 0x46, (byte) 0xf9}, "guest\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020\u2020".getBytes("UTF-16BE"), 5));
+		servers.add(new sAcct(new byte[]{127, 0, 0, 1}, "testServer\u2020\u2020\u2020\u2020\u2020\u2020".getBytes("UTF-16BE"), new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0}, new byte[]{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 1L));
 		out = new DataOutputStream(new FileOutputStream(new File("TWAuth")));
 		out.writeLong(6);
 		out.writeLong(2);
@@ -33,7 +33,7 @@ import java.io.FileOutputStream;
 		out.flush();
 		out.close();
 		System.exit(0);
-		*/in = new DataInputStream(new FileInputStream(new File("TWAuth")));
+		/**/in = new DataInputStream(new FileInputStream(new File("TWAuth")));
 		uAcct.nextUID = in.readLong();
 		sAcct.nextSID = in.readLong();
 		users = Arrays.asList(uAcct.fromStream());
@@ -101,7 +101,7 @@ import java.io.FileOutputStream;
 		System.arraycopy(sno, 0, toh, 32, 32);
 		sAcct smr;
 		synchronized (servers) {
-			ind = servers.indexOf(new sAcct(new byte[0], new byte[0], new byte[0], serverID));
+			ind = servers.indexOf(new sAcct(new byte[0], new byte[0], new byte[0], new byte[0], serverID));
 			if (ind == -1) {
 				uOut.write(0x55);
 				return true;

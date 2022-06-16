@@ -3,9 +3,9 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 class Dog extends Entity {
 	static final int invSpace = 2;
-	final byte type = 1;
 	boolean healed;
 	Dog(int x, int y, long data, short health) {
+		type = 1;
 		inventory = new Item[invSpace];
 		face = 'd';
 		this.x = x;
@@ -19,17 +19,45 @@ class Dog extends Entity {
 			color = 9;
 		}
 	}
-	void toDataStream(DataOutputStream dataOut) throws Exception {//TODO Include face value
+	Dog(int x, int y, long data, short health, Item[] inv) {
+		type = 1;
+		inventory = new Item[invSpace];
+		System.arraycopy(inv, 0, inventory, 0, Math.min(invSpace, inv.length));
+		face = 'd';
+		this.x = x;
+		this.y = y;
+		xO = x;
+		yO = y;
+		this.data = data;
+		this.health = health;
+		color = (byte) ((data >>> 6) & 0xf);
+		if ((color == 0) || (color == 7) || (color == 8) || (color == 15)) {
+			color = 9;
+		}
+	}
+	void serialize(DataOutputStream dataOut) throws Exception {//TODO Include face value
 		dataOut.write(type);
+		dataOut.writeInt(inventory.length);
+		for (Item I : inventory) {
+			if (I == null) {
+				dataOut.write(0);
+				continue;
+			}
+			I.serialize(dataOut);
+		}
 		dataOut.writeInt(x);
 		dataOut.writeInt(y);
 		dataOut.writeLong(data);
 		dataOut.writeShort(health);
 	}
 	static Dog fromDataStream(DataInputStream readFrom) throws Exception {
-		return new Dog(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort());
+		Item[] inv = new Item[readFrom.readInt()];
+		for (int n = 0; n < inv.length; n++) {
+			inv[n] = Item.deserialize(readFrom);
+		}
+		return new Dog(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort(), inv);
 	}
-	void animate(int EID) {
+	void animate(int EID) throws Exception {
 		if (checkDeath(EID)) {
 			return;
 		}

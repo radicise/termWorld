@@ -3,6 +3,7 @@ class sAcct {
 	byte[] ipv4;
 	byte[] sName;
 	byte[] secret;
+	byte[] pass;
 	long SID;
 	static Long nextSID;
 	public boolean equals(Object against) {
@@ -11,16 +12,12 @@ class sAcct {
 		}
 		return this.SID == ((sAcct) against).SID;
 	}
-	sAcct(byte[] ipv4, String sName, byte[] secret) throws Exception {
-		this.ipv4 = ipv4;
-		this.sName = sName.getBytes("UTF-8");
-		this.secret = secret;
-	}
-	sAcct(byte[] ipv4, byte[] sName, byte[] secret, long SID) {
+	sAcct(byte[] ipv4, byte[] sName, byte[] secret, byte[] pw, long SID) {
 		this.ipv4 = ipv4;
 		this.sName = sName;
 		this.secret = secret;
 		this.SID = SID;
+		pass = pw;
 	}
 	static sAcct[] fromStream() throws Exception {
 		int i = Auth.in.readInt();
@@ -28,6 +25,7 @@ class sAcct {
 		byte[] ip;
 		byte[] sn;
 		byte[] sc;
+		byte[] pw;
 		for (int n = 0; n < i; n++) {
 			ip = new byte[4];
 			Auth.in.read(ip);
@@ -35,7 +33,9 @@ class sAcct {
 			Auth.in.read(sn);
 			sc = new byte[32];
 			Auth.in.read(sc);
-			result[n] = new sAcct(ip, sn, sc, Auth.in.readLong());
+			pw = new byte[32];
+			Auth.in.read(pw);
+			result[n] = new sAcct(ip, sn, sc, pw, Auth.in.readLong());
 		}
 		return result;
 	}
@@ -45,6 +45,7 @@ class sAcct {
 			Auth.out.write(servers[i].ipv4);
 			Auth.out.write(servers[i].sName);
 			Auth.out.write(servers[i].secret);
+			Auth.out.write(servers[i].pass);
 			Auth.out.writeLong(servers[i].SID);
 		}
 	}
