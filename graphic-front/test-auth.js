@@ -5,6 +5,7 @@ const { stringToBuffer } = require("./string-to-buf");
 const { publicEncrypt, privateDecrypt, createPublicKey } = require("crypto");
 const { generateKeyPair, symmetricEncrypt, symmetricDecrypt } = require("./keygen");
 const { formatBuf } = require("./logging");
+const { SymmetricCipher } = require("./encryption");
 
 let [publicKey, privateKey] = generateKeyPair();
 
@@ -43,7 +44,7 @@ function auth_write (data) {
     auth.write(Buffer.from(data));
 }
 
-async function start () {
+async function start3 () {
     auth_write([0x33, 1, 0, 0, 0, 0, 0, 0, 1]);
     if ((await read(auth, 1))[0] === 0x55) {
         console.log("server not exist");
@@ -68,16 +69,16 @@ async function start () {
     console.log("success");
 }
 
-async function start3 () {
+async function start () {
     auth_write([0x32, 0x00]);
     let buf = await read(auth, 2);
-    console.log(buf);
+    // console.log(buf);
     buf = await read(auth, buf[0] << 8 | buf[1]);
-    console.log(Buffer.from(buf).toString("utf-8"));
+    // console.log(Buffer.from(buf).toString("utf-8"));
     // let ret = Array.from(Buffer.alloc(32, 0));
-    let ret = stringToBuffer("password");
+    let ret = stringToBuffer("password", true);
     const encryptedPassword = publicEncrypt(createPublicKey(Buffer.from(buf).toString("utf-8")), Buffer.from(ret));
-    const exp = stringToBuffer(publicKey.export({format:"pem",type:"spki"}));
+    const exp = stringToBuffer(publicKey.export({format:"pem",type:"spki"}), true);
     auth_write([(encryptedPassword.length & 0xff00) >> 8, encryptedPassword.length & 0xff, (exp.length & 0xff00) >> 8, exp.length & 0xff]);
     auth.write(encryptedPassword);
     auth.write(exp);
@@ -87,17 +88,30 @@ async function start3 () {
         return;
     }
     buf = await read(auth, 2);
-    const symmetricKey = await read(auth, buf[0] << 8 | buf[1], {transform:{f:privateDecrypt,args:[privateKey]}});
+    const cipher = new SymmetricCipher(privateDecrypt(privateKey, Buffer.from(await read(auth, buf[0] << 8 | buf[1]))));
     /**
-     * @param {Number[]} data
+     * @param {number[] | number | Buffer} data
      */
     function enwrite (data) {
-        data = Buffer.from(Array.isArray(data) ? data : [data]);
-        auth.write(symmetricEncrypt(symmetricKey, data));
+        data = Buffer.isBuffer(data) ? data : Buffer.from(Array.isArray(data) ? data : [data]);
+        auth.write(cipher.crypt(data));
+        // auth.write(symmetricEncrypt(symmetricKey, data));
     }
     if (process.argv[2] === "create-user") {
-        //
+        enwrite(0x01);
+        const ret = Buffer.concat([Buffer.alloc(32, 0x20), Buffer.concat([Buffer.alloc(7, 0), Buffer.from([0x05])]), Buffer.alloc(32, 0x20)]);
+        // console.log(ret);
+        enwrite(ret);
+        const res = cipher.crypt(await read(auth, 1));
+        if (res === 0x01) {
+            console.log("userid in use");
+        } else if (res === 0x02) {
+            console.log("username in use");
+        } else if (res === 0x03) {
+            console.log("success");
+        }
     }
+    enwrite(0x00);
 }
 
 async function start2 () {

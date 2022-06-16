@@ -12,17 +12,12 @@ let authConnection;
 
 /**
  * authenticates a user
- * @param {Number[]} userName
- * @param {Number[]} password
- * @param {Number[]} clientID
+ * @param {number[]} userName
+ * @param {number[]} password
+ * @param {number[]} clientID
  * @returns {Promise<void|true>}
  */
 async function authenticate (userName, password, clientID) {
-    // for (let i = userName.length; i < 32; i ++) {userName.push(0x32);}
-    // for (let i = password.length; i < 32; i ++) {password.push(0x32);}
-    // userName = userName.pa;
-    // password = password.fill(0x20, password.length, 32);
-    // userName = Buffer.alloc(32);
     const server = serverConnection;
     const auth = authConnection;
     function server_write (data) {
@@ -81,7 +76,7 @@ async function authenticate (userName, password, clientID) {
 }
 
 async function main () {
-    /**@type {String[]} */
+    /**@type {string[]} */
     const argv = await invoke("request:args");
 
     // log(argv);

@@ -7,6 +7,9 @@ function createWindow () {
         webPreferences : {
             contextIsolation : false,
             nodeIntegration : true,
+            nodeIntegrationInSubFrames : true,
+            nodeIntegrationInWorker : true,
+            allowRunningInsecureContent : true,
         }
     });
     win.loadFile(join_path(__dirname, "html", "title.html"));

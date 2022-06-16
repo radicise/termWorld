@@ -1,9 +1,10 @@
 // const { Transform } = require("stream");
+const { hash } = require("./hash");
 const { stringToBuffer } = require("./string-to-buf");
 
 class KeyLengthError extends Error {
     /**
-     * represents an error cause by an invalid key length
+     * represents an error caused by an invalid key length
      * @param {String} message - error message
      */
     constructor (message) {
@@ -55,6 +56,57 @@ const enc = crypt(key, "my stuff");
 
 console.log(enc.toString("utf-8"), crypt(key, enc).toString("utf-8"));
 
+class SymmetricCipher {
+    /**
+     * creates a symmetric cipher
+     * @param {Buffer} key cipher key
+     */
+    constructor (key) {
+        if (!Buffer.isBuffer(key)) {
+            throw new TypeError(`expected buffer but got ${key.__proto__.constructor.name} instead`);
+        }
+        if (key.length !== 32) {
+            throw new KeyLengthError(`exoected 32 byte key but got key with ${key.length} instead`);
+        }
+        this.key = key;
+        this.key_position = 0;
+        /**
+         * @typedef DEF1
+         * @description encrypts / decrypts string
+         * @type {{(data : String) => Buffer}}
+         * @ function
+         * @ param {String} data
+         * @ returns {Buffer}
+         */
+        /**
+         * @type {{
+         * DEF1;
+         * (data : Number[]) => Buffer;
+         * (data : Buffer) => Buffer;
+         * }}
+         */
+        // this.crypt = (data) => {};
+    }
+    regen_key () {
+        this.key_position = 0;
+        this.key = Buffer.from(hash(this.key));
+    }
+    /**
+     * encrypts a string
+     * @method
+     * @param {String} data data to encrypt
+     * @returns {Buffer}
+     *//**
+    * encrypts a buffer
+    * @method
+    * @param {Buffer} data data to encrypt
+    * @returns {Buffer}
+    */
+    crypt (data) {}
+}
+
+new SymmetricCipher().crypt
+
 // function decrypt (key, buf) {}
 
 // class EncryptStream extends Transform {
@@ -70,3 +122,5 @@ console.log(enc.toString("utf-8"), crypt(key, enc).toString("utf-8"));
 //         this.key = key;
 //     }
 // }
+
+exports.SymmetricCipher = SymmetricCipher;

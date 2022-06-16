@@ -37,3 +37,15 @@ div#server-cont > * > *.server-info {
     /* padding-top : 2px; */
     padding-left : 20px;
 }
+
+div#server-cont > * > *.server-info > *.server-status.status-active {
+    color : lawngreen;
+}
+
+div#server-cont > * > *.server-info > *.server-status.status-full {
+    color : orange;
+}
+
+div#server-cont > * > *.server-info > *.server-status.status-offline {
+    color : crimson;
+}

@@ -1,13 +1,13 @@
-
 /**
  * converts a string to a buffer of the bytes that the string is made from
- * @param {String} str string to convert
- * @param {Boolean} [asutf8] whether to return in uft-8
- * @param {Number} [padto] length to pad to, default no padding
- * @param {Number} [padwith] what to pad the buffer with
+ * @param {string | Buffer} str string to convert
+ * @param {boolean} [asutf8] whether to return in uft-8
+ * @param {number} [padto] length to pad to, default no padding
+ * @param {number} [padwith] what to pad the buffer with
  * @returns {Buffer}
  */
 function stringToBuffer (str, asutf8, padto, padwith) {
+    if (Buffer.isBuffer(str)) return str;
     let f = [];
     for (let i = 0; i < str.length; i ++) {
         const x = str.charCodeAt(i);
@@ -21,10 +21,11 @@ function stringToBuffer (str, asutf8, padto, padwith) {
 }
 
 /**
- * @param {String} str
+ * @param {string | Buffer} str string to convert
  * @returns {Buffer}
  */
 function charsToBuffer (str) {
+    if (Buffer.isBuffer(str)) return str;
     let f = [];
     const c = "0123456789abcdef";
     for (let i = 0; i < str.length; i += 2) {

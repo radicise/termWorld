@@ -161,7 +161,7 @@ LOOP {
         }
         (id === 0x01) { // register new account
                 Client -> Auth: <username> + <userid> + <account password>
-                Auth -> Client: 0x00 if username is taken, 0x01 if user id is taken, 0x02 if username is taken and auth policy "unique usernames" is true, 0x03 on success
+                Auth -> Client: 0x01 if user id is taken, 0x02 if username is taken and auth policy "unique usernames" is true, 0x03 on success
         }
         (<unrecognized id>) {
                 Auth -> Client: 0xff

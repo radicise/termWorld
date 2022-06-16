@@ -4,8 +4,8 @@ const { randomBytes, publicEncrypt, privateDecrypt, createPublicKey } = require(
 const { read } = require("./block-read");
 const { stringToBuffer, charsToBuffer } = require("./string-to-buf");
 const { generateKeyPair, symmetricEncrypt, symmetricDecrypt } = require("./keygen");
+const { SymmetricCipher } = require("./encryption");
 const { hash } = require("./hash");
-// const readline = require("readline");
 const { Logger, formatBuf } = require("./logging");
 
 const argv = process.argv;
@@ -31,7 +31,6 @@ function onexit () {
     }
 }
 
-// process.on("exit", ()=>{no_exit=true;onexit();no_exit=false;});
 process.on("SIGINT", onexit);
 process.on("SIGUSR1", onexit);
 process.on("SIGUSR2", onexit);
@@ -68,21 +67,21 @@ const c = "0123456789abcdef";
 
 /**
  * converts n to hex representation
- * @param {Number[]|Number} n thing to convert
- * @returns {String[]|String}
+ * @param {number|number[]}n thing to convert
+ * @returns {string}
  */
 function asHex (n) {
-    const isa = Array.isArray(n);
-    if (!isa) {n = [n];}
+    if (!Array.isArray(n)) {
+        return c[n >> 4] + c[n & 0x0f];
+    }
     let f = n.map(v => c[v >> 4]+c[v & 0x0f]);
-    if (!isa) {f = f[0];}
     return f;
 }
 
 /**
  * reduces buffer contents to hex representation
- * @param {Int8Array} buf buffer to reduce
- * @returns {String}
+ * @param {number[]|Buffer} buf buffer to reduce
+ * @returns {string}
  */
 function reduceToHex (buf) {
     return buf.map(v => c[v >> 4]+c[v & 0x0f]).join("");
@@ -103,6 +102,7 @@ setInterval(() => {
 }, 1000);
 
 const server = net.createServer(async (socket) => {
+    // let socket = 
     // if (banish.includes(socket.remoteAddress)) {socket.end();return;}
     // banish.push(socket.remoteAddress);
     if (socket.remoteAddress in banish) {
@@ -120,12 +120,12 @@ const server = net.createServer(async (socket) => {
     socketIDS ++;
     socket.pause();
     function write (data) {
-        if (!Array.isArray(data)) {
+        if (!Array.isArray(data) && !Buffer.isBuffer(data)) {
             data = [data];
         }
         socket.write(Buffer.from(data));
     }
-    let buf = [];
+    let buf;
     logger.mkLog(`connection: ${usingID}, waiting for op`);
     buf = await read(socket, 1);
     logger.mkLog(`${usingID} recieved opid: ${asHex(buf[0])}`);
@@ -158,7 +158,7 @@ const server = net.createServer(async (socket) => {
         }
         write(0x63);
         if (!(reduceToHex(buf.slice(0, 8)) in serverIdDb)) {
-            logger.mkLog(`${usingID} authentication failure: server id "${reduceToHex(targetSID)}" does not exist"`);
+            logger.mkLog(`${usingID} authentication failure: server id "${targetSID}" does not exist"`);
             failed();
             return;
         }
@@ -181,9 +181,9 @@ const server = net.createServer(async (socket) => {
         write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
         socket.write(exp);
         buf = await read(socket, 4);
-        buf = await read(socket, buf[0] << 8 | buf[1]);
-        // console.log(buf);
-        const password = privateDecrypt(privateKey, Buffer.from(buf)).toString("utf-8");
+        const buf2 = await read(socket, buf[0] << 8 | buf[1]);
+        console.log(buf2);
+        const password = privateDecrypt(privateKey, Buffer.from(buf2)).toString("utf-8");
         buf = await read(socket, buf[2] << 8 | buf[3]);
         // console.log(password, process.env.AUTH_ADMIN);
         if (password !== process.env.AUTH_ADMIN) {
@@ -197,16 +197,18 @@ const server = net.createServer(async (socket) => {
         const encrypted = publicEncrypt(clientPub, symmetricKey);
         write([(encrypted.length & 0xff00) >> 8, encrypted.length & 0xff]);
         socket.write(encrypted);
+        const cipher = new SymmetricCipher(symmetricKey);
         /**
-         * @param {Number[]} data
+         * @param {number[] | number | Buffer} data
          */
         function enwrite (data) {
-            data = Buffer.from(Array.isArray(data) ? data : [data]);
-            socket.write(symmetricEncrypt(symmetricKey, data));
+            data = Buffer.isBuffer(data) ? data : Buffer.from(Array.isArray(data) ? data : [data]);
+            socket.write(cipher.crypt(data));
+            // socket.write(symmetricEncrypt(symmetricKey, data));
         }
         let breakout;
         while (true) {
-            buf = await read(socket, 1, {default:0x00,transform:{f:symmetricDecrypt,args:[symmetricKey]}});
+            buf = cipher.crypt(await read(socket, 1, {default:0x00}));
             switch (buf[0]) {
                 case 0x00:
                     console.log("EXITCODE");
@@ -214,16 +216,20 @@ const server = net.createServer(async (socket) => {
                     breakout = true;
                     break;
                 case 0x01:
-                    console.log(`connection ${usingID} account registration attempt`);
-                    buf = await read(socket, 72, {transform:{f:symmetricDecrypt,args:[symmetricKey]}});
+                    // console.log(`connection ${usingID} account registration attempt`);
+                    buf = cipher.crypt(await read(socket, 72));
                     const usrname = Buffer.from(buf.slice(0, 32)).toString("utf-8");
                     const usrid = buf.slice(32, 40);
                     const password = Buffer.from(buf.slice(40, 72)).toString("utf-8");
+                    // console.log(`DETAILS\n${formatBuf(usrname)}, ${formatBuf(usrid)}, ${formatBuf(password)}`);
                     if (reduceToHex(usrid) in userIdDb) {
                         enwrite(0x01);
                         break;
                     }
                     userIdDb[reduceToHex(usrid)] = [usrname, password];
+                    if (unsafe_logs) {
+                        logger.mkLog(`${usingID} registered account "${usrname}" with password "${password}"`);
+                    }
                     enwrite(0x03);
                     break;
                 default:

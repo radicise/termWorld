@@ -1,8 +1,11 @@
-const { send, invoke, ServerDescriptor } = require("../js/common");
+const { send, invoke, ServerDescriptor, mkTmp } = require("../js/common");
 const { readFileSync, writeFileSync } = require("fs");
-const { read } = require("../block-read");
-const Socket = require("net").Socket;
+// import { read } from "../block-read";
+const { NSocket } = require("../socket");
+// const Socket = require("net").Socket;
 const join_path = require("path").join;
+
+mkTmp({defaultData:"{\n    \"servers\": []\n}",path:["..", "data", "servers.json"]});
 
 /**@type {HTMLDivElement} */
 const server_list = document.getElementById("server-cont");
@@ -12,47 +15,39 @@ let servers;
 
 const server_data_path = join_path(__dirname, "..", "data", "servers.json");
 
+function save_servers () {
+    writeFileSync(server_data_path, JSON.stringify({servers:servers.map(v => v.export())}));
+}
+
 /**
  * @returns {ServerDescriptor[]}
  */
 function fetchServers () {
-    /**@type {{host_ip:String,auth_ip:String,host_port:Number,auth_port:Number,server_name:String,profile_name:String}[]} */
-    const datal = JSON.parse(readFileSync(server_data_path)).servers;
-    return datal.map(data => {
-        data.get_max_players = () => {
-            return new Promise(async (res, rej) => {
-                const sock = new Socket();
-                const timeoutID = setTimeout(() => {
-                    rej("connection timeout");
-                }, 15000);
-                sock.on("error", (err) => {rej(`an error ocurred ${err.toString()}`)})
-                sock.connect(data.host_port, data.host_ip, () => {
-                    clearTimeout(timeoutID);
-                    //
-                });
-            });
-        };
-    });
+    /**@type {{host_ip:string,auth_ip:string,host_port:number,auth_port:number,server_name:string,profile_name:string}[]} */
+    const datal = JSON.parse(readFileSync(server_data_path, {encoding:"utf-8"})).servers;
+    return datal.map(data => new ServerDescriptor(data));
 }
 
-/**
- * gets max and current player counts
- * @param {()=>Promise<Number>} get_max
- * @param {()=>Promise<Number>} get_current
- * @returns {Promise<[Number, Number], [Number, any]>}
- */
-function get_server_player_counts (get_max, get_current) {
-    return new Promise((res, rej) => {
-        let max;
-        let cur;
-        get_max().then(v => {max = v; if (cur ?? false === cur) {res([max, cur]);}}, reason => rej([0, reason]));
-        get_current().then(v => {cur = v; if (max ?? false === max) {res([max, cur]);}}, reason => rej([1, reason]));
-    });
+function updateServerCounts () {
+    let i = 0;
+    const x = ["active", "full", "offline"];
+    for (const server of servers) {
+        server.get_server_player_counts().then(v => {
+            server_list.children[i].querySelector("span.server-info").querySelector("span.server-players").textContent = `${v[1]} / ${v[0]}`;
+        });
+        server.get_status().then(v => {
+            const status = server_list.children[i].querySelector("span.server-info").querySelector("span.server-status");
+            status.textContent = x[v];
+            status.className = `server-status status-${x[v]}`;
+        });
+        i ++;
+    }
 }
 
 async function reloadServers () {
     server_list.replaceChildren();
     servers = fetchServers();
+    const x = ["active", "full", "offline"];
     // servers = await invoke("request:servers");
     for (const server of servers) {
         const cd = document.createElement("div");
@@ -64,8 +59,16 @@ async function reloadServers () {
         name.className = "server-name";
         const players = document.createElement("span");
         players.className = "server-players";
+        const status = document.createElement("span");
         name.textContent = server.server_name;
-        get_server_player_counts().then(v => players.textContent = v);
+        server.get_server_player_counts().then(v => players.textContent = `${v[1]} / ${v[0]}`);
+        server.get_status().then(v => {
+            status.textContent = x[v];
+            status.className = `server-status status-${x[v]}`;
+        });
+        cs.replaceChildren(name, players, status);
+        cd.replaceChildren(img, cs);
+        server_list.appendChild(cd);
     }
 }
 

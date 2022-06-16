@@ -5,19 +5,19 @@ const c = "0123456789abcdef";
 
 /**
  * formats a buffer as a string
- * @param {Buffer|Array[]} buf buffer to format
- * @returns {String}
+ * @param {Buffer | number[]} buf buffer to format
+ * @returns {string}
  */
 function formatBuf (buf) {
     if (Buffer.isBuffer(buf)) {
         buf = Array.from(buf);
     }
-    return `<Buffer ${buf.map(v => c[v >> 4] + c[v & 0x0f]).toString().split(",").join(" ")}>`;
+    return `<Buffer ${Array.isArray(buf)?buf:Array.from(buf).map(v => c[v >> 4] + c[v & 0x0f]).toString().split(",").join(" ")}>`;
 }
 
 class Logger {
     /**
-     * @param {String[]} path
+     * @param {string[]} path
      */
     constructor (...path) {
         for (let i = 1; i < path.length; i ++) {
@@ -35,19 +35,16 @@ class Logger {
     }
     /**
      * formats a buffer as a string
-     * @param {Buffer|Array[]} buf buffer to format
-     * @returns {String}
+     * @param {Buffer | number[]} buf buffer to format
+     * @returns {string}
      */
     formatBuf (buf) {
-        if (Buffer.isBuffer(buf)) {
-            buf = Array.from(buf);
-        }
-        return `<Buffer ${buf.map(v => c[v >> 4] + c[v & 0x0f]).toString().split(",").join(" ")}>`;
+        return formatBuf(buf);
     }
     /**
      * makes a log entry
-     * @param {String} text text to log
-     * @returns void
+     * @param {string} text text to log
+     * @returns {void}
      */
     mkLog (text) {
         if (this.no_logging) return;
