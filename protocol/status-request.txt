@@ -2,12 +2,15 @@ for Hosts:
 
 Client -> Host: 0x64
 
-get player counts:
+get current information:
 Client -> Host: 0x01
-Host -> Client: <maximum count 2 byte number>
-Host -> Client: <current count 2 byte number>
+Host -> Client: <maximum player count 2 byte integer>
+Host -> Client: <current player count 2 byte integer>
 <disconnection>
 
-get authorized authentication servers:
+get static information:
 Client -> Host: 0x02
+Host -> Client: <serverName, String>
+Host -> Client: <turn interval in milliseconds, 2-byte integer>
 Host -> Client: <SERVER SHARING PROTOCOL>
+<disconnection>
