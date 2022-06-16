@@ -68,15 +68,17 @@ Serialized level data format:
         int, player spawn Y-coordinate
         int, amount of serialized entities, followed by the serialized data for each entity
         Serialized entity data format:
-                byte, entity type; 0 = Entity, 1 = Dog, 2 = EntityPlayer
+                byte, entity type; 0 = Entity, 1 = Dog, 2 = EntityPlayer, 3 = EntityItem
                 IF IT IS AN EntityPlayer:
                         int, inventory size
                         for each inventory slot, the serialized data for the Item is provided, in order from slot 1 to the highest slot;
                         Serialized item data format:
-                                byte, quantity; IF THIS IS 0x00 THEN THE Item IS NULL AND NO MORE READING IS PERFORMED
+                                byte, quantity, if this is 0xff then the quantity is considered zero; IF THIS IS 0x00 THEN THE Item IS NULL AND NO MORE READING IS PERFORMED
                                 byte, thingID; 0 = cloth patch, 1 = water bottle, 2 = stone
                 int, X-coordinate
                 int, Y-coordinate
+                IF IT IS AN EntityItem:
+                        Serialized item data
                 long, raw data available to the entity
                 short, health amount
 short, animation interval time in milliseconds
@@ -102,6 +104,13 @@ else if ((fID & 2) == 0) {//entity update
         if ((fID & 4 == 4) {//entity movement
                 [int newX]//entity's new X-coordinate
                 [int newY]//entity's new Y-coordinate
+        }
+        if ((fID & 8) == 8) {//entity health update
+                [short health]//entity's new health
+        }
+        if ((fID & 16) == 16) {//inventory slot update
+                [int invSlot]//inventory slot number, zero-indexed
+                [byte-sequence item]//serialized item data for the new item at the index
         }
 }
 else {
@@ -161,7 +170,7 @@ LOOP {
         }
         (id === 0x01) { // register new account
                 Client -> Auth: <username> + <userid> + <account password>
-                Auth -> Client: 0x01 if user id is taken, 0x02 if username is taken and auth policy "unique usernames" is true, 0x03 on success
+                Auth -> Client: 0x00 if username is taken, 0x01 if user id is taken, 0x02 if username is taken and auth policy "unique usernames" is true, 0x03 on success
         }
         (<unrecognized id>) {
                 Auth -> Client: 0xff
