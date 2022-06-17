@@ -1,5 +1,5 @@
 Definitions:
-long: Signed 8-bit big-endian integer
+long: Signed 8-byte big-endian integer
 int: Signed 4-byte big-endian integer
 short: Signed 2-byte big-endian integer
 char: Unsigned 2-byte integer, is the Unicode value of a character which lies within Basic Multilingual Plane
@@ -20,12 +20,13 @@ Plain entities start with u+203c or equivalent as the starting icon
 Default Host Server Port = 15651
 Default Auth Server Port = 15652
 
-Protocol:
+Game protocol:
+
+Login opID:
+Client -> Host: 0x63
 
 Auth:
 
-
-Client -> Host: 0x63
 Client -> Host: <username>
 Host -> Client: <nonce0> + <serverID>
 Client -> Auth: 0x63 + <userID>
@@ -38,13 +39,12 @@ Auth -> Client: hash(<username> + <nonce0> + <server>.<currentSecret> + <userID>
 Client -> Host: <username> + <userid> + <the hash that the server gave>
 Host -> Client: 0x63 for acceptance, 0x55 for rejection
 
-
 After auth:
 H -> C
-int, version ID
+int, host's version ID
 
 C -> S
-int, version ID
+int, client's version ID
 
 S -> H
 byte, signifies if the server will accept the player. 0x63 is acceptance, 0x55 is rejection; if rejected, an int value containing the length of the rejection message in bytes is sent and then followed by the message itself, text in big-endian UTF-16; rejected players must then disconnect
@@ -130,6 +130,20 @@ Destroy tile under client's matching EntityPlayer: 0x65
 Backward-cycle tile under client's watching EntityPlayer: 0x64
 
 
+Host To Auth Server Secrets:
+
+Host -> Auth: 0x33 + <server id>
+Auth -> Host: 0x63 on success, 0x55 if rejected because server id doesn't exist
+IF rejected: auth disconnects
+Auth -> Host: nonce0
+Host -> Auth: hash(<Hserver password> + nonce0)
+Auth -> Host: 0x63 on success, 0x55 on reject
+IF rejected: auth disconnects
+Auth -> Host: <public length> + <public key>
+Host -> Auth: <encrypt length> + encrypt(<new server secret>)
+Auth -> Host: 0x63 on success, 0x55 in the event of failure
+IF rejected: auth disconnects
+
 
 Auth Server Password Exchange:
 
@@ -137,14 +151,14 @@ lengths are 2 byte unsigned ints
 
 see "protocol-symmetric-encryption.txt" for details on symmetric encryption 
 
-Client -> Auth: 0x32
-Auth -> Client: <public key length>
-Auth -> Client: <auth public key>
-Client -> Auth: <encrypted message length> + <client public key length>
-Client -> Auth: encrypt(<password>) + <client public key>
-Auth -> Client: 0x55 on invalid password, <random byte != 0x55> on success
-Auth -> Client: <encrypted symmetric key length>
-Auth -> Client: encrypt(<symmetric session key>)
+AuthClient -> Auth: 0x32
+Auth -> AuthClient: <public key length>
+Auth -> AuthClient: <auth public key>
+AuthClient -> Auth: <encrypted message length> + <client public key length> + encrypt(<password>) + <client public key>
+Auth -> AuthClient: 0x55 on invalid password, <random byte != 0x55> on success
+IF rejected: auth disconnects
+Auth -> AuthClient: <encrypted symmetric key length>
+Auth -> AuthClient: encrypt(<symmetric session key>)
 
 LOOP {
         ALL COMMUNICATIONS ENCRYPTED WITH SESSION KEY

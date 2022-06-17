@@ -1,3 +1,4 @@
+Serialization of a server address list:
 send ( <number of servers 1 byte> )
 FOR EACH SERVER {
     send ( 0x01 if using IPv4, 0x02 if using IPv6, 0x03 if using domain name )
@@ -5,11 +6,11 @@ FOR EACH SERVER {
         send ( 4 bytes for address )
     }
     IF USING IPv6 {
-        send ( 6 bytes for address )
+        send ( 16 bytes for address )
     }
     IF USING DOMAIN NAME {
-        send ( 2 byte number representing length in BYTES )
-        send ( <domain name> )
+        send ( 2 byte integer representing length in BYTES )
+        send ( <domain name>, String )
     }
-    send ( 2 byte unsigned number for port )
+    send ( 2 byte unsigned integer for port )
 }
