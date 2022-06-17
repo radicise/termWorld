@@ -13,3 +13,4 @@ TERMS:
 Host - Server hosting the actual game
 Auth - Authentication server
 Client - User client
+Server - either a Host or Auth server

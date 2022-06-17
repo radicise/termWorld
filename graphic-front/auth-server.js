@@ -7,6 +7,7 @@ const { generateKeyPair, symmetricEncrypt, symmetricDecrypt } = require("./keyge
 const { SymmetricCipher } = require("./encryption");
 const { hash } = require("./hash");
 const { Logger, formatBuf } = require("./logging");
+const { NSocket } = require("./socket");
 
 const argv = process.argv;
 
@@ -101,182 +102,158 @@ setInterval(() => {
     }
 }, 1000);
 
-const server = net.createServer(async (socket) => {
-    // let socket = 
-    // if (banish.includes(socket.remoteAddress)) {socket.end();return;}
-    // banish.push(socket.remoteAddress);
-    if (socket.remoteAddress in banish) {
-        return;
-    }
-    function failed (nb) {
-        if (!nb) {
-            banish[socket.remoteAddress] = 30;
-            logger.mkLog(`${usingID} was banished`);
+const server = net.createServer(
+    /**
+     * @param {NSocket} socket 
+     */
+    async (socket) => {
+        socket = NSocket.from(socket);
+        if (socket.remoteAddress in banish) return;
+        function failed (nb) {
+            if (!nb) {
+                banish[socket.remoteAddress] = 30;
+                logger.mkLog(`${usingID} was banished`);
+            }
+            socket.write(0x55);
+            socket.end();
         }
-        write(0x55);
+        const usingID = socketIDS;
+        socketIDS ++;
+        let buf;
+        logger.mkLog(`connection: ${usingID}, waiting for op`);
+        buf = await socket.read(1);
+        logger.mkLog(`${usingID} recieved opid: ${asHex(buf[0])}`);
+        if (buf[0] === 0x63) {
+            buf = await socket.read(8);
+            const uID = reduceToHex(buf);
+            // console.log(uID);
+            // console.log(buf);
+            if (!(uID in userIdDb)) {
+                logger.mkLog(`${usingID} authentication failure: player id "${uID}" does not exist`);
+                failed();
+                return;
+            }
+            socket.write(0x63);
+            const nonce1 = randomBytes(32);
+            socket.write(nonce1);
+            buf = await socket.read(72);
+            const targetSID = reduceToHex(buf.slice(0, 8));
+            const nonce0 = buf.slice(8, 40);
+            const ghash = buf.slice(40, 72);
+            let h2 = Array.from(userIdDb[uID][1]);
+            for (let i = h2.length; i < 32; i ++) h2.push(0x20);
+            const h1 = hash(Buffer.concat([Buffer.from(h2), nonce1, charsToBuffer(uID)]));
+            console.log(`${formatBuf(h2)}\n${formatBuf(nonce1)}\n${formatBuf(charsToBuffer(uID))}`);
+            console.log(`${formatBuf(h1)}\n${formatBuf(ghash)}`);
+            if (h1.some((v, i) => v !== ghash[i])) {
+                logger.mkLog(`${usingID} authentication failure: player secret not validated`);
+                failed();
+                return;
+            }
+            socket.write(0x63);
+            if (!(reduceToHex(buf.slice(0, 8)) in serverIdDb)) {
+                logger.mkLog(`${usingID} authentication failure: server id "${targetSID}" does not exist"`);
+                failed();
+                return;
+            }
+            socketwrite(0x63);
+            let h = Array.from(stringToBuffer(userIdDb[uID][0]));
+            for (let i = h.length; i < 32; i ++) h.push(0x20);
+            const b = Buffer.from(hash(Buffer.concat([Buffer.from(h), Buffer.from(nonce0), serverIdDb[targetSID][1], charsToBuffer(uID)])));
+            logger.mkLog(`${usingID} was authenticated` + (unsafe_logs ? ` computed hash = ${logger.formatBuf(b)}` : ""));
+            socket.write(b);
+        } else if (buf[0] === 0x32) {
+            buf = await socket.read(1);
+            const exp = stringToBuffer(publicKey.export({type:"spki",format:"pem"}), true);
+            socket.write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
+            socket.write(exp);
+            buf = await socket.read(4);
+            const buf2 = await socket.read(buf[0] << 8 | buf[1]);
+            console.log(buf2);
+            const password = privateDecrypt(privateKey, Buffer.from(buf2)).toString("utf-8");
+            buf = await socket.read(buf[2] << 8 | buf[3]);
+            if (password !== process.env.AUTH_ADMIN) {
+                socket.write(0x55);
+                socket.end();
+                return;
+            }
+            socket.write(0x00);
+            const clientPub = createPublicKey(Buffer.from(buf));
+            const symmetricKey = randomBytes(32);
+            const encrypted = publicEncrypt(clientPub, symmetricKey);
+            socket.write([(encrypted.length & 0xff00) >> 8, encrypted.length & 0xff]);
+            socket.write(encrypted);
+            const cipher = new SymmetricCipher(symmetricKey);
+            /**
+             * @param {number[] | number | Buffer} data
+             */
+            function enwrite (data) {
+                data = Buffer.isBuffer(data) ? data : Buffer.from(Array.isArray(data) ? data : [data]);
+                socket.write(cipher.crypt(data));
+                // socket.write(symmetricEncrypt(symmetricKey, data));
+            }
+            let breakout;
+            while (true) {
+                buf = cipher.crypt(await read(socket, 1, {default:0x00}));
+                switch (buf[0]) {
+                    case 0x00:
+                        console.log("EXITCODE");
+                        socket.end();
+                        breakout = true;
+                        break;
+                    case 0x01:
+                        // console.log(`connection ${usingID} account registration attempt`);
+                        buf = cipher.crypt(await socket.read(72));
+                        const usrname = Buffer.from(buf.slice(0, 32)).toString("utf-8");
+                        const usrid = buf.slice(32, 40);
+                        const password = Buffer.from(buf.slice(40, 72)).toString("utf-8");
+                        // console.log(`DETAILS\n${formatBuf(usrname)}, ${formatBuf(usrid)}, ${formatBuf(password)}`);
+                        if (reduceToHex(usrid) in userIdDb) {
+                            enwrite(0x01);
+                            break;
+                        }
+                        userIdDb[reduceToHex(usrid)] = [usrname, password];
+                        if (unsafe_logs) {
+                            logger.mkLog(`${usingID} registered account "${usrname}" with password "${password}"`);
+                        }
+                        enwrite(0x03);
+                        break;
+                    default:
+                        enwrite(0xff);
+                        break;
+                }
+                if (breakout) break;
+            }
+            console.log("exited");
+        } else if (buf[0] === 0x33) {
+            const SID = await socket.read(8);
+            logger.mkLog(`${usingID} has identified as server "${formatBuf(SID)}" with op for server secret update`);
+            if (!(reduceToHex(SID) in serverIdDb)) {
+                logger.mkLog(`SERVER SECRET ${usingID} - server id not found`);
+                failed(true);
+                return;
+            }
+            socket.write(0x63);
+            const nonce0 = randomBytes(32);
+            socket.write(nonce0);
+            logger.mkLog(`SERVER SECRET ${usingID} - generated nonce`);
+            buf = await read(socket, 32);
+            if (hash(Buffer.concat([serverIdDb[reduceToHex(SID)][0], nonce0])).some((v, i) => v !== buf[i])) {
+                logger.mkLog(`SERVER SECRET ${usingID} - failed to authenticate server`)
+                failed(true);
+                return;
+            }
+            socket.write(0x63);
+            const exp = stringToBuffer(publicKey.export({format:"pem",type:"spki"}), true);
+            socket.write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
+            socket.write(exp);
+            buf = await read(socket, 2);
+            buf = await read(socket, (buf[0] << 8) | buf[1]);
+            const sec = privateDecrypt(privateKey, Buffer.from(buf));
+            serverIdDb[reduceToHex(SID)][1] = sec;
+            socket.write(0x63);
+            logger.mkLog(`SERVER SECRET ${usingID} - updated server secret successfully` + (unsafe_logs ? ` to ${formatBuf(sec)}` : ""));
+        }
         socket.end();
     }
-    const usingID = socketIDS;
-    socketIDS ++;
-    socket.pause();
-    function write (data) {
-        if (!Array.isArray(data) && !Buffer.isBuffer(data)) {
-            data = [data];
-        }
-        socket.write(Buffer.from(data));
-    }
-    let buf;
-    logger.mkLog(`connection: ${usingID}, waiting for op`);
-    buf = await read(socket, 1);
-    logger.mkLog(`${usingID} recieved opid: ${asHex(buf[0])}`);
-    if (buf[0] === 0x63) {
-        buf = await read(socket, 8);
-        const uID = reduceToHex(buf);
-        // console.log(uID);
-        // console.log(buf);
-        if (!(uID in userIdDb)) {
-            logger.mkLog(`${usingID} authentication failure: player id "${uID}" does not exist`);
-            failed();
-            return;
-        }
-        write(0x63);
-        const nonce1 = randomBytes(32);
-        socket.write(nonce1);
-        buf = await read(socket, 72);
-        const targetSID = reduceToHex(buf.slice(0, 8));
-        const nonce0 = buf.slice(8, 40);
-        const ghash = buf.slice(40, 72);
-        let h2 = Array.from(userIdDb[uID][1]);
-        for (let i = h2.length; i < 32; i ++) h2.push(0x20);
-        const h1 = hash(Buffer.concat([Buffer.from(h2), nonce1, charsToBuffer(uID)]));
-        console.log(`${formatBuf(h2)}\n${formatBuf(nonce1)}\n${formatBuf(charsToBuffer(uID))}`);
-        console.log(`${formatBuf(h1)}\n${formatBuf(ghash)}`);
-        if (h1.some((v, i) => v !== ghash[i])) {
-            logger.mkLog(`${usingID} authentication failure: player secret not validated`);
-            failed();
-            return;
-        }
-        write(0x63);
-        if (!(reduceToHex(buf.slice(0, 8)) in serverIdDb)) {
-            logger.mkLog(`${usingID} authentication failure: server id "${targetSID}" does not exist"`);
-            failed();
-            return;
-        }
-        write(0x63);
-        let h = Array.from(stringToBuffer(userIdDb[uID][0]));
-        for (let i = h.length; i < 32; i ++) h.push(0x20);
-        // console.log(h);
-        // console.log(Buffer.from(h));
-        // console.log(Buffer.from(nonce0));
-        // console.log(serverIdDb[targetSID]);
-        // console.log(Buffer.from([0, 0, 0, 0, 0, 0, 0, 5]));
-        const b = Buffer.from(hash(Buffer.concat([Buffer.from(h), Buffer.from(nonce0), serverIdDb[targetSID][1], charsToBuffer(uID)])));
-        logger.mkLog(`${usingID} was authenticated` + (unsafe_logs ? ` computed hash = ${logger.formatBuf(b)}` : ""));
-        socket.write(b);
-        // console.log(buf);
-    } else if (buf[0] === 0x32) {
-        buf = await read(socket, 1);
-        const exp = stringToBuffer(publicKey.export({type:"spki",format:"pem"}), true);
-        // console.log(exp, exp.length, exp.length & 0xff00, exp.length & 0xff);
-        write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
-        socket.write(exp);
-        buf = await read(socket, 4);
-        const buf2 = await read(socket, buf[0] << 8 | buf[1]);
-        console.log(buf2);
-        const password = privateDecrypt(privateKey, Buffer.from(buf2)).toString("utf-8");
-        buf = await read(socket, buf[2] << 8 | buf[3]);
-        // console.log(password, process.env.AUTH_ADMIN);
-        if (password !== process.env.AUTH_ADMIN) {
-            write(0x55);
-            socket.end();
-            return;
-        }
-        write(0x00);
-        const clientPub = createPublicKey(Buffer.from(buf));
-        const symmetricKey = randomBytes(32);
-        const encrypted = publicEncrypt(clientPub, symmetricKey);
-        write([(encrypted.length & 0xff00) >> 8, encrypted.length & 0xff]);
-        socket.write(encrypted);
-        const cipher = new SymmetricCipher(symmetricKey);
-        /**
-         * @param {number[] | number | Buffer} data
-         */
-        function enwrite (data) {
-            data = Buffer.isBuffer(data) ? data : Buffer.from(Array.isArray(data) ? data : [data]);
-            socket.write(cipher.crypt(data));
-            // socket.write(symmetricEncrypt(symmetricKey, data));
-        }
-        let breakout;
-        while (true) {
-            buf = cipher.crypt(await read(socket, 1, {default:0x00}));
-            switch (buf[0]) {
-                case 0x00:
-                    console.log("EXITCODE");
-                    socket.end();
-                    breakout = true;
-                    break;
-                case 0x01:
-                    // console.log(`connection ${usingID} account registration attempt`);
-                    buf = cipher.crypt(await read(socket, 72));
-                    const usrname = Buffer.from(buf.slice(0, 32)).toString("utf-8");
-                    const usrid = buf.slice(32, 40);
-                    const password = Buffer.from(buf.slice(40, 72)).toString("utf-8");
-                    // console.log(`DETAILS\n${formatBuf(usrname)}, ${formatBuf(usrid)}, ${formatBuf(password)}`);
-                    if (reduceToHex(usrid) in userIdDb) {
-                        enwrite(0x01);
-                        break;
-                    }
-                    userIdDb[reduceToHex(usrid)] = [usrname, password];
-                    if (unsafe_logs) {
-                        logger.mkLog(`${usingID} registered account "${usrname}" with password "${password}"`);
-                    }
-                    enwrite(0x03);
-                    break;
-                default:
-                    enwrite(0xff);
-                    break;
-            }
-            if (breakout) break;
-        }
-        console.log("exited");
-    } else if (buf[0] === 0x33) {
-        const SID = await read(socket, 8);
-        logger.mkLog(`${usingID} has identified as server "${logger.formatBuf(SID)}" with op for server secret update`);
-        if (!(reduceToHex(SID) in serverIdDb)) {
-            logger.mkLog(`SERVER SECRET ${usingID} - server id not found`);
-            failed(true);
-            return;
-        }
-        write(0x63);
-        const nonce0 = randomBytes(32);
-        socket.write(nonce0);
-        logger.mkLog(`SERVER SECRET ${usingID} - generated nonce`);
-        buf = await read(socket, 32);
-        if (hash(Buffer.concat([serverIdDb[reduceToHex(SID)][0], nonce0])).some((v, i) => v !== buf[i])) {
-            logger.mkLog(`SERVER SECRET ${usingID} - failed to authenticate server`)
-            failed(true);
-            return;
-        }
-        write(0x63);
-        const exp = stringToBuffer(publicKey.export({format:"pem",type:"spki"}), true);
-        // console.log(exp.toString("utf-8"));
-        // createPublicKey(exp);
-        write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
-        socket.write(exp);
-        buf = await read(socket, 2);
-        buf = await read(socket, (buf[0] << 8) | buf[1]);
-        const sec = privateDecrypt(privateKey, Buffer.from(buf));
-        serverIdDb[reduceToHex(SID)][1] = sec;
-        write(0x63);
-        logger.mkLog(`SERVER SECRET ${usingID} - updated server secret successfully` + (unsafe_logs ? ` to ${logger.formatBuf(sec)}` : ""));
-    }
-    socket.end();
-}).listen(Number(argv[2]) || 15652);
-
-// const interface = readline.createInterface(process.stdin, process.stdout);
-
-// interface.on("line", (input) => {
-//     if (input === "clear banish") {
-//         banish = [];
-//     }
-// });
+).listen(Number(argv[2]) || 15652);

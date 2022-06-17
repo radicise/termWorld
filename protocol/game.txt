@@ -130,16 +130,6 @@ Destroy tile under client's matching EntityPlayer: 0x65
 Backward-cycle tile under client's watching EntityPlayer: 0x64
 
 
-Host To Auth Server Secrets:
-
-Host -> Auth: 0x33 + <server id>
-Auth -> Host: 0x63 on success, 0x55 if server id doesn't exist
-Auth -> Host: nonce0
-Host -> Auth: hash(<Hserver password> + nonce0)
-Auth -> Host: 0x63 on success, 0x55 on reject
-Auth -> Host: <public length> + <public key>
-Host -> Auth: <encrypt length> + encrypt(<new server secret>)
-Auth -> Host: 0x63 on success, 0x55 in the event of failure
 
 Auth Server Password Exchange:
 

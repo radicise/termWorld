@@ -1,0 +1,82 @@
+used to remotely configure Host and Auth servers
+
+Client -> Server: 0x64
+Server -> Client: <public key length> + <public key>
+Client -> Server: <encrypted length> + encrypt ( <password> )
+ON FAILURE {
+    Server -> Client: 0x55
+    <disconnection>
+}
+ON SUCCESS {
+    Server -> Client: 0x63
+}
+Client -> Server: <public key length> + <client public key>
+Server -> Client: <encrypted length> + encrypt ( <symmetric key> )
+
+BELOW HAPPENS IN LOOP - ALL COMMUNICATION IS ENCRYPTED USING THE SYMMETRIC ENCRYPTION PROTOCOL:
+
+Client -> Server: <opid>
+
+COMMON {
+    if (opid == 0x00) {
+        <disconnection>
+    }
+}
+
+FOR HOSTS {
+    // update policy
+    if (opid == 0x01) {
+        Client -> Host: <policy id> see "policies" for more
+        Client -> Host {
+            if policy is boolean : 0x01 = false, 0x02 = true
+            if policy is number : 4 byte signed number
+            if policy is string : <string length in bytes> + <string>
+        }
+        Host -> Client: 0x63 for success, 0x55 for failure
+    }
+    if (opid == 0x02) {
+        execute ( <server-secret-update-protocol> )
+        if success {
+            Host -> Client: 0x63
+        } else {
+            Host -> Client: 0x55
+        }
+    }
+}
+
+FOR AUTHS {
+    // update policy
+    if (opid == 0x01) {
+        Client -> Auth: <policy id> see "policies" for more
+        Client -> Auth {
+            if policy is boolean : 0x01 = false, 0x02 = true
+            if policy is number : 4 byte signed number
+            if policy is string : <string length in bytes> + <string>
+        }
+        Auth -> Client: 0x63 for success, 0x55 for failure
+    }
+    // allows invalidating or renaming accounts that have the same name
+    if (opid == 0x02) {
+        Auth -> Client: 0x63 if <require-unique-names> is enabled, 0x55 otherwise ON 0x55 THE OPERATION IS TERMINATED
+        Auth -> Client: <number of accounts that need to be resolved> (4 bytes) NOTE: this is the number of DUPLICATES, the first accounts found with a name shouldn't be counted or sent to be resolved
+        for (account in to_resolve) {
+            Auth -> Client: <account id> + <account name>
+            while (new_name == old_name) {
+                Client -> Auth: <new account name>
+                Auth -> Client: 0x63 on success, 0x55 if <new name> is the same as the old name
+            }
+        }
+    }
+}
+
+policies:
+
+Host policies {
+    0 allow-no-authentication-servers - boolean - when true, allows players to join without authenticating if the server has no authentication server. when false authentication fails automatically
+
+    1 max-player-count - number - maximum number of players allowed to be in the server at a given time
+}
+
+Auth policies {
+    0 require-unique-names : boolean - sets if the authentication server should require all accounts to have unique names NOTE: setting this should not invalidate already existing accounts
+}

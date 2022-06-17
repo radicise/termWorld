@@ -54,6 +54,7 @@ async function reloadServers () {
         const img = document.createElement("img");
         const cs = document.createElement("span");
         img.className = "server-icon";
+        img.src = server.icon ?? "../assets/default-icon.svg";
         cs.className = "server-info";
         const name = document.createElement("span");
         name.className = "server-name";
@@ -63,7 +64,11 @@ async function reloadServers () {
         name.textContent = server.server_name;
         server.get_server_player_counts().then(v => players.textContent = `${v[1]} / ${v[0]}`);
         server.get_status().then(v => {
-            status.textContent = x[v];
+            const sico = document.createElement("img");
+            sico.src = `../assets/status-icos/${x[v]}.svg`;
+            status.appendChild(sico);
+            status.append(x[v]);
+            // status.textContent = x[v];
             status.className = `server-status status-${x[v]}`;
         });
         cs.replaceChildren(name, players, status);
@@ -77,4 +82,8 @@ reloadServers();
 
 document.getElementById("back-btn").addEventListener("click", () => {
     send("load:view", "title");
+});
+
+document.getElementById("add-server-btn").addEventListener("click", () => {
+    //
 });
