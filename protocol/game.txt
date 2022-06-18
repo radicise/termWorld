@@ -87,7 +87,7 @@ H -> C
 (pseudo-code)
 [byte fID]//function ID
 if (fID == 2) {
-        //render the level
+        //animation frame has finished, render the level
 }
 else if ((fID & 2) == 0) {//entity update
         [int xPos]//entity's X-coordinate

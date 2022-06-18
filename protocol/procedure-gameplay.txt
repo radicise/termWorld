@@ -1,0 +1,86 @@
+MULTIPLE ENTITIES CAN NEVER BE IN THE SAME LOCATION
+
+The host's game has:
+  Animation interval, integer representing the amount of milliseconds between each animation frame
+  Level age, integer representing the amount of animation frames elapsed
+  A 2-dimensional matrix representing the terrain's tiles, each tile holding its own ID
+  Entities, each having:
+    8 bytes of raw data
+      Bits 11th-to-last to 7th-to-last represent the entity's color as an unsigned integer value
+    An entity type: Entity|Dog|EntityPlayer|EntityItem
+    Player spawn X-position
+    Player spawn Y-position
+    X-position
+    Y-position
+    Health, an integer value
+    A characher within the Basic Multilingual Place of Unicode, representing how the entity will look (client does not have to display the exact character, may be replaced with another character or in a graphical client with graphics etc.)
+    A fixed-length array of items which represents its inventory
+      Plain Entity has 0-length inventory, EntityPlayer has 15-length inventory, Dog has 2-length inventory, EntityItem has 0-length inventory
+      Items are comprised of:
+        An item type: cloth_patch|water_bottle|stone
+        Quantity, an integer value
+    In addition, there is some entity-specific data:
+      EntityItems have an item separate from their inventory, representing the item which they hold
+      Dogs have healing number 0-15 dictating when in the 16-frame cycle they heal, this suggested to be stored in the last 4 bits of the Dog's raw data
+
+Game running procedure:
+  Entity movement attempt procedure, IF IT IS IN EXCESS OF 15 LEVELS OF RECURSION THEN DENY MOVEMENT:
+    IF this entity is moving because another entity is trying to move into its location:
+      health--
+    IF the desired location is out of bounds:
+      Change the desired location to the location in bounds which is closest to the desired location
+    IF a wall is at the desired location:
+      Deny movement
+    IF an EntityItem is at the desired location:
+      Give as much of the item of the EntityItem to the moving entity as possible, if all of it is given then remove the EntityItem
+    IF there is an entity (INCLUDING an EntityItem) at the desired location:
+      Attempt to move the the other entity by the original vector that the entity trying to move tried to move by. If that movement is denied, try to move the other entity by the original vector rotated 90 degrees clockwise. If that movement is denied, try to move the other entity by the original vector rotated 90 degrees counter-clockwise. If that movement is denied, try to move the other entity by the twice the original vector rotated 180 degrees. If that movement is denied, deny movement to the entity attempting to move. 
+      IF there is still an entity at the desired location:
+        Deny movement
+      Move the entity to the desired location
+    Move the entity to the desired location
+  
+  Upon player join:
+    Authenticate the player
+    IF the spawn location has no entity on it:
+      Spawn the player, accept it
+    ELSE:
+      Kick with reason "Spawn blocked!"
+  
+  Each animation frame:
+    FOR each entity:
+      IF it is a plain Entity:
+        IF health < 1:
+          Remove this entity
+          Skip to next FOR loop iteration
+        Toggle icon between u+203c and '!'
+      IF it is a Dog:
+        IF health < 1:
+          Remove this entity
+          Skip to next FOR loop iteration
+        RANDOM (one RNG call, one of the possibilities is run according to the chance and the RNG):
+          31.25%:
+            desiredX = 1
+          31.25%:
+            desiredX = (-1)
+          37.5%:
+            desiredX = 0
+        RANDOM:
+          31.25%:
+            desiredY = 1
+          31.25%:
+            desiredY = (-1)
+          37.5%:
+            desiredY = 0
+        IF health is less than 5:
+          desiredX *= 2
+          desiredY *= 2
+        Attempt movement by desiredX, desiredY
+        IF (health < 10) AND ((level.age ^ healingNumber) == 0):
+          health++
+      IF it is an EntityItem:
+        Do nothing
+      IF it is an EntityPlayer:
+        Attempt any requested movement, only 1-tile movement in each direction is possible per animation frame
+        Perform any requested destruction
+        Perform any requested tile cycling, only +1 or no change (if forward-cycle and backward-cycle are both requested) or -1 value are possible per animation frame when cycling is requested (wraps back to 0 when going lower than 7 and 7 when going lower than 0)
