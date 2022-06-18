@@ -1,32 +1,28 @@
 require("dotenv").config();
 const net = require("net");
 const { randomBytes, publicEncrypt, privateDecrypt, createPublicKey } = require("crypto");
+const { NSocket, stringToBuffer, charsToBuffer, reduceToHex, asHex, generateKeyPair, SymmetricCipher, hash, Logger, formatBuf } = require("./defs");
 const { read } = require("./block-read");
-const { stringToBuffer, charsToBuffer } = require("./string-to-buf");
-const { generateKeyPair, symmetricEncrypt, symmetricDecrypt } = require("./keygen");
-const { SymmetricCipher } = require("./encryption");
-const { hash } = require("./hash");
-const { Logger, formatBuf } = require("./logging");
-const { NSocket } = require("./socket");
+// const { stringToBuffer, charsToBuffer, reduceToHex, asHex } = require("./string-to-buf");
+// const { generateKeyPair, symmetricEncrypt, symmetricDecrypt } = require("./keygen");
+// const { SymmetricCipher } = require("./encryption");
+// const { hash } = require("./hash");
+// const { Logger, formatBuf } = require("./logging");
+// const { NSocket } = require("./socket");
 
 const argv = process.argv;
-
-function getTimeStamp () {
-    const d = new Date();
-    return `(${["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"][d.getDay()]} ${d.getMonth()} ${d.getDate()} ${d.getFullYear()} @ ${d.getHours()}:${d.getMinutes()}:${d.getSeconds()})`;
-}
 
 const logger = new Logger("logs", "auth-log.log");
 
 if (argv.includes("--clear-log")) logger.clearLogFile();
 
-logger.mkLog(`INSTANCE START ${getTimeStamp()}`);
+logger.mkLog("INSTANCE START", true);
 
 let no_exit = false;
 
 function onexit () {
     logger.no_logging = false;
-    logger.mkLog(`INSTANCE END ${getTimeStamp()}`);
+    logger.mkLog("INSTANCE END", true);
     if (!no_exit) {
         process.exit();
     }
@@ -35,7 +31,7 @@ function onexit () {
 process.on("SIGINT", onexit);
 process.on("SIGUSR1", onexit);
 process.on("SIGUSR2", onexit);
-process.on("uncaughtException", (l)=>{logger.no_logging=false;logger.mkLog(`UNHANDLED EXCEPTION ${getTimeStamp()}: ${l}`);console.log(l?.stack);onexit()});
+process.on("uncaughtException", (l)=>{logger.no_logging=false;logger.mkLog(`UNHANDLED EXCEPTION: ${l}`, true);console.log(l?.stack);onexit()});
 
 const unsafe_logs = argv.includes("--unsafe-log");
 if (unsafe_logs) logger.mkLog("UNSAFE LOGGING ENABLED");
@@ -61,31 +57,6 @@ let userIdDb = {
 let serverIdDb = {
     "0000000000000000" : [Buffer.from(hash(Buffer.concat([stringToBuffer("password"), Buffer.alloc(8, 0)]))), Buffer.alloc(32, 0)],
     "0000000000000001" : [Buffer.from(hash(Buffer.concat([stringToBuffer("password"), Buffer.from([0, 0, 0, 0, 0, 0, 0, 1])]))), Buffer.from([0x58, 0xe0, 0xd3, 0x14, 0x41, 0xd0, 0xe6, 0x6e, 0x8b, 0xa4, 0xf1, 0xd3, 0x4b, 0xc6, 0x46, 0x76, 0x10, 0xa7, 0x2f, 0x22, 0xbd, 0x04, 0x53, 0x2b, 0xf1, 0x8f, 0x0b, 0xb3, 0x35, 0xac, 0x72, 0xb0])],
-}
-
-const c = "0123456789abcdef";
-
-
-/**
- * converts n to hex representation
- * @param {number|number[]}n thing to convert
- * @returns {string}
- */
-function asHex (n) {
-    if (!Array.isArray(n)) {
-        return c[n >> 4] + c[n & 0x0f];
-    }
-    let f = n.map(v => c[v >> 4]+c[v & 0x0f]);
-    return f;
-}
-
-/**
- * reduces buffer contents to hex representation
- * @param {number[]|Buffer} buf buffer to reduce
- * @returns {string}
- */
-function reduceToHex (buf) {
-    return buf.map(v => c[v >> 4]+c[v & 0x0f]).join("");
 }
 
 let socketIDS = 0;
@@ -121,9 +92,9 @@ const server = net.createServer(
         socketIDS ++;
         let buf;
         logger.mkLog(`connection: ${usingID}, waiting for op`);
-        buf = await socket.read(1);
+        buf = await socket.read(1, {format:"number"});
         logger.mkLog(`${usingID} recieved opid: ${asHex(buf[0])}`);
-        if (buf[0] === 0x63) {
+        if (buf === 0x63) {
             buf = await socket.read(8);
             const uID = reduceToHex(buf);
             // console.log(uID);
@@ -143,8 +114,8 @@ const server = net.createServer(
             let h2 = Array.from(userIdDb[uID][1]);
             for (let i = h2.length; i < 32; i ++) h2.push(0x20);
             const h1 = hash(Buffer.concat([Buffer.from(h2), nonce1, charsToBuffer(uID)]));
-            console.log(`${formatBuf(h2)}\n${formatBuf(nonce1)}\n${formatBuf(charsToBuffer(uID))}`);
-            console.log(`${formatBuf(h1)}\n${formatBuf(ghash)}`);
+            // console.log(`${formatBuf(h2)}\n${formatBuf(nonce1)}\n${formatBuf(charsToBuffer(uID))}`);
+            // console.log(`${formatBuf(h1)}\n${formatBuf(ghash)}`);
             if (h1.some((v, i) => v !== ghash[i])) {
                 logger.mkLog(`${usingID} authentication failure: player secret not validated`);
                 failed();
@@ -156,14 +127,13 @@ const server = net.createServer(
                 failed();
                 return;
             }
-            socketwrite(0x63);
+            socket.write(0x63);
             let h = Array.from(stringToBuffer(userIdDb[uID][0]));
             for (let i = h.length; i < 32; i ++) h.push(0x20);
             const b = Buffer.from(hash(Buffer.concat([Buffer.from(h), Buffer.from(nonce0), serverIdDb[targetSID][1], charsToBuffer(uID)])));
             logger.mkLog(`${usingID} was authenticated` + (unsafe_logs ? ` computed hash = ${logger.formatBuf(b)}` : ""));
             socket.write(b);
         } else if (buf[0] === 0x32) {
-            buf = await socket.read(1);
             const exp = stringToBuffer(publicKey.export({type:"spki",format:"pem"}), true);
             socket.write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
             socket.write(exp);
@@ -237,8 +207,9 @@ const server = net.createServer(
             const nonce0 = randomBytes(32);
             socket.write(nonce0);
             logger.mkLog(`SERVER SECRET ${usingID} - generated nonce`);
-            buf = await read(socket, 32);
-            if (hash(Buffer.concat([serverIdDb[reduceToHex(SID)][0], nonce0])).some((v, i) => v !== buf[i])) {
+            let buf = await socket.read(32);
+            const h1 = hash(Buffer.concat([serverIdDb[reduceToHex(SID)][0], nonce0]));
+            if (h1.some((v, i) => v !== buf[i])) {
                 logger.mkLog(`SERVER SECRET ${usingID} - failed to authenticate server`)
                 failed(true);
                 return;
@@ -247,8 +218,8 @@ const server = net.createServer(
             const exp = stringToBuffer(publicKey.export({format:"pem",type:"spki"}), true);
             socket.write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
             socket.write(exp);
-            buf = await read(socket, 2);
-            buf = await read(socket, (buf[0] << 8) | buf[1]);
+            buf = await socket.read(2);
+            buf = await socket.read((buf[0] << 8) | buf[1]);
             const sec = privateDecrypt(privateKey, Buffer.from(buf));
             serverIdDb[reduceToHex(SID)][1] = sec;
             socket.write(0x63);
