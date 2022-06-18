@@ -13,7 +13,7 @@ The host's game has:
     X-position
     Y-position
     Health, an integer value
-    A characher within the Basic Multilingual Place of Unicode, representing how the entity will look (client does not have to display the exact character, may be replaced with another character or in a graphical client with graphics etc.)
+    A characher within the Basic Multilingual Plane of Unicode, representing how the entity will look (client does not have to display the exact character, may be replaced with another character or in a graphical client with graphics etc.)
     A fixed-length array of items which represents its inventory
       Plain Entity has 0-length inventory, EntityPlayer has 15-length inventory, Dog has 2-length inventory, EntityItem has 0-length inventory
       Items are comprised of:
