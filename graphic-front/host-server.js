@@ -1,7 +1,7 @@
 const net = require("net");
 const { randomBytes, publicEncrypt, createPublicKey } = require("crypto");
 const dns_lookup = require("dns").lookup;
-const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket } = require("./defs");
+const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes } = require("./defs");
 
 const argv = process.argv;
 
@@ -43,6 +43,8 @@ let serverPassword = "password";
 
 class Host {
     constructor () {
+        this.name = "DEFAULT SERVER";
+        this.turn_interval = 300;
         this.player_count = 0;
         this.max_players = 0;
         /**@type {{id:0|1|2,address:any,port:number}[]} */
@@ -120,7 +122,61 @@ class Host {
     /**
      * @param {NSocket} socket
      */
-    socketConnection (socket) {}
+    async socketJoinServer (socket) {
+        return;
+    }
+    /**
+     * @param {NSocket} socket
+     */
+    async socketManagementLoop (socket) {
+        //
+    }
+    /**
+     * @param {NSocket} socket
+     */
+    async socketStatusRequest (socket) {
+        const statusid = await socket.read(1, {format:"number"});
+        switch (statusid) {
+            case 0x01:
+                socket.write([...bigToBytes(this.max_players, 2), ...bigToBytes(this.player_count, 2)]);
+                break;
+            case 0x02:
+                socket.write(stringToBuffer(this.name.slice(0, 20)));
+                socket.write(bigToBytes(this.turn_interval, 2));
+                break;
+            case 0x03:
+                socket.write(this.maintain_auths.length & 0xff);
+                for (const server of this.maintain_auths) {
+                    socket.write(server.id + 1);
+                    switch (server.id) {
+                        case 0:
+                            socket.write(server.address);
+                            break;
+                        case 1:
+                            socket.write(server.address);
+                            break;
+                        case 2:
+                            const s = stringToBuffer(server.address);
+                            socket.write(bigToBytes(s.length, 4));
+                            socket.write(s);
+                            break;
+                    }
+                    socket.write(bigToBytes(server.port, 2));
+                }
+                break;
+        }
+        socket.end();
+    }
+    /**
+     * @param {NSocket} socket
+     */
+    async socketConnection (socket) {
+        const initopid = await socket.read(1, {format:"number"});
+        if (initopid === 0x00) return;
+        if (initopid === 0x63) return this.socketJoinServer(socket);
+        if (initopid === 0x64) return this.socketStatusRequest(socket);
+        if (initopid === 0x01) return this.socketManagementLoop(socket);
+    }
 }
 
 const host = new Host();

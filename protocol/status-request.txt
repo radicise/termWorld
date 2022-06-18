@@ -11,5 +11,9 @@ get static information:
 Client -> Host: 0x02
 Host -> Client: <serverName, String>
 Host -> Client: <turn interval in milliseconds, 2-byte integer>
+<disconnection>
+
+get auth servers:
+Client -> Host: 0x03
 Host -> Client: <SERVER SHARING PROTOCOL>
 <disconnection>

@@ -1,6 +1,6 @@
 used to remotely configure Host and Auth servers
 
-Client -> Server: 0x64
+Client -> Server: 0x01
 Server -> Client: <public key length> + <public key>
 Client -> Server: <encrypted length> + encrypt ( <password> )
 ON FAILURE {

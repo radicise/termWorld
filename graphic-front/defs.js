@@ -510,6 +510,34 @@ class SymmetricCipher {
     }
 }
 
+/**
+ * segments a number into bytes
+ * @param {number} big number to segment
+ * @param {number} byte_count number of bytes to segment big into
+ * @returns {number[]}
+ */
+function bigToBytes (big, byte_count) {
+    /**@type {number[]} */
+    let f = [];
+    for (let i = byte_count-1; i >= 0; i --) {
+        f.push((big & (0xff << (i * 8))) >> (i * 8));
+    }
+    return f;
+}
+
+/**
+ * creates a number out of component bytes
+ * @param {number[]} bytes bytes to convert
+ * @returns {number}
+ */
+function bytesToBig (bytes) {
+    let f = 0;
+    for (let i = bytes.length - 1; i >= 0; i --) {
+        f = f | (bytes[i] << (i * 8));
+    }
+    return f;
+}
+
 exports.SymmetricCipher = SymmetricCipher;
 exports.NSocket = NSocket;
 exports.Logger = Logger;
@@ -521,3 +549,5 @@ exports.asHex = asHex;
 exports.reduceToHex = reduceToHex;
 exports.generateKeyPair = generateKeyPair;
 exports.hash = hash;
+exports.bigToBytes = bigToBytes;
+exports.bytesToBig = bytesToBig;

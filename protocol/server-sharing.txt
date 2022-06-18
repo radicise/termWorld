@@ -9,7 +9,7 @@ FOR EACH SERVER {
         send ( 16 bytes for address )
     }
     IF USING DOMAIN NAME {
-        send ( 2 byte integer representing length in BYTES )
+        send ( 4 byte integer representing length in BYTES )
         send ( <domain name>, String )
     }
     send ( 2 byte unsigned integer for port )
