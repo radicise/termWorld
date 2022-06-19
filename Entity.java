@@ -142,7 +142,7 @@ class Entity {
 			if (Server.level.ent[n].type == 3) {
 				give(((EntityItem) Server.level.ent[n]).item);
 				if (((EntityItem) Server.level.ent[n]).item.quantity == 0) {
-					Server.level.ent[n].data = -1;
+					Server.level.ent[n].data |= ((long) -1);
 				}
 			}
 			if (Server.level.ent[n].moveBy(Dx, Dy, d + 1) ? true : (Server.level.ent[n].moveBy(-Dy, Dx, d + 1) ? true : (Server.level.ent[n].moveBy(Dy, -Dx, d + 1) ? true : Server.level.ent[n].moveBy(-(2 * Dx), -(2 * Dy), d + 1)))) {

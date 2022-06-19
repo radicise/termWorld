@@ -14,7 +14,7 @@ public class Client {
 	public static final int defaultAuthPort = 15652;
 	public static int authPort = defaultAuthPort;
 	public static int serverVersion;
-	static OutputStream out;
+	static OutputStream out;//TODO Change to BufferedOutputStream (even in declaration) and add flush() calls when chat or other features which need buffering are added
 	static InputStream in;
 	static int turnInterval;
 	public static volatile boolean up;
@@ -127,6 +127,7 @@ public class Client {
 				socket.close();
 				throw new Exception("Username is too long");
 			}
+			out.write(0x63);
 			Arrays.fill(unB, (byte) 32);
 			System.arraycopy(name, 0, unB, 0, name.length);
 			out.write(unB);

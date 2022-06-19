@@ -17,6 +17,8 @@ public class Server {
 	public static final String versionString = "0.0.2";
 	public static final int defaultPort = 15651;
 	public static int port = defaultPort;
+	static byte[][] authsIPv4;
+	static int[] authsPorts;
 	public static volatile String levelname = "defaultLevel";
 	public static Level level = null;
 	public static short turnInterval = 189;
@@ -27,6 +29,24 @@ public class Server {
 	static byte[] bufBytes = buf.array();
 	static long GUSID = 1;//Server ID
 	public static void main(String[] arg) throws Exception {
+		{
+			String[] aut;
+			String[] byt;
+			String[] cshr = arg[0].split(",");
+			String[] tps;
+			authsPorts = new int[cshr.length];
+			aut = new String[cshr.length];
+			for (int i = 0; i < cshr.length; i++) {
+				tps = cshr[i].split(":");
+				aut[i] = tps[0];
+				authsPorts[i] = Integer.parseInt(tps[1]);
+			}
+			authsIPv4 = new byte[cshr.length][];
+			for (int i = 0; i < cshr.length; i++) {
+				byt = aut[i].split("\\.");
+				authsIPv4[i] = new byte[]{(byte) Integer.parseInt(byt[0]),(byte) Integer.parseInt(byt[1]),(byte) Integer.parseInt(byt[2]),(byte) Integer.parseInt(byt[3])};
+			}
+		}//GC
 		/*Entity[] ent = new Entity[1024];
 		ent[0] = new Dog(2, 1, 0L, (short) 10);
 		TreeMap<Long, Integer> entities = new TreeMap<Long, Integer>();
@@ -66,6 +86,7 @@ public class Server {
 					    		CoPl = players.get(n);
 					    		try {
 					    			CoPl.out.write(bufBytes, 0, pos);//TODO Prevent lag due to blocking writes
+					    			CoPl.out.flush();
 					    		}
 					    		catch (Exception E) {
 					    			CoPl.kick("Exception in Socket communication to client: " + E);
@@ -92,13 +113,21 @@ public class Server {
 		}, 0, turnInterval);
 		while (true) {
 			try {
-				(new Thread(new ConnectedPlayer(server.accept(), level.nextSlot()))).start();
+				(new Thread(new ConnectedPlayer(server.accept()))).start();
 			}
 			catch (Exception E) {
 				System.out.println("An Exception has occurred: " + E);
 				server.close();
 				System.exit(3);
 			}
+		}
+	}
+	void updateSalt(byte[] newSalt) throws Exception {
+		synchronized (ConnectedPlayer.secret) {
+			System.arraycopy(newSalt, 0, ConnectedPlayer.secret, 0, 32);
+		}
+		for (int i = 0; i < authsPorts.length; i++) {
+			throw new Exception("Not yet implemented");
 		}
 	}
 }

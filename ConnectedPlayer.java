@@ -1,14 +1,15 @@
 package termWorld;
+import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.util.Arrays;
 class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
-	OutputStream out;
+	BufferedOutputStream out;
 	InputStream in;
 	Socket socket;
 	public String username;
@@ -18,14 +19,21 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	public volatile boolean alive = true;
 	public int clientVersion;
 	private static boolean genInit = false;
+	private int h;
 	static private byte[] superSecret = new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0};//Arbitrary random value used for seeding of the authentication nonce generator
-	static private byte[] secret = new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0};//Arbitrary random value used for authentication
+	static byte[] secret = new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0};//Arbitrary random value used for authentication
 	static private SecureRandom nonceGen;
-	ConnectedPlayer(Socket socket, int EID) throws Exception {
+	ConnectedPlayer(Socket socket) throws Exception {
 		this.socket = socket;
-		this.out = socket.getOutputStream();
+		this.out = new BufferedOutputStream(socket.getOutputStream());
 		this.in = socket.getInputStream();
-		this.EID = EID;
+		h = socket.getInputStream().read();
+		if (h == -1) {
+			throw new Exception();
+		}
+		if (h == 0x63) {
+			EID = Server.level.nextSlot();
+		}
 		synchronized(Server.playerVal) {
 			SUID = Server.playerVal;
 			Server.playerVal++;
@@ -51,7 +59,12 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	}
 	public void run() {
 		try {
-			serve();
+			if (h == 0x63) {
+				serve();
+			}
+			else {
+				throw new Exception("Not yet implemented");
+			}
 		}
 		catch (Exception E) {
 			System.out.println("An Exception has occurred: " + E);
@@ -73,6 +86,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			nonceGen.nextBytes(nonce);
 			out.write(nonce);
 			dOut.writeLong(Server.GUSID);
+			out.flush();
 			in.read(uname);
 			UID = dIn.readLong();
 			byte[] claim = new byte[32];
@@ -80,7 +94,9 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			byte[] toh = new byte[104];
 			System.arraycopy(uname, 0, toh, 0, 32);
 			System.arraycopy(nonce, 0, toh, 32, 32);
-			System.arraycopy(secret, 0, toh, 64, 32);
+			synchronized (secret) {
+				System.arraycopy(secret, 0, toh, 64, 32);
+			}
 			for (int i = 0; i < 8; i++) {
 				toh[103 - i] = (byte) (UID >>> (i * 8));
 			}
@@ -106,11 +122,12 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 				System.out.print(',');
 			}
 			System.out.println();
-			if (!Arrays.equals(nonce, claim)) {
+			*/if (!Arrays.equals(nonce, claim)) {
 				out.write(0x55);
+				out.flush();
 				return;
 			}
-			*/out.write(0x63);
+			out.write(0x63);
 		}
 		catch (Exception E) {
 			System.out.println("A connecting user failed to be authenticated due to an Exception having occurred: " + E);
@@ -118,11 +135,13 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			return;
 		}
 		dOut.writeInt(Server.version);
+		out.flush();
 		clientVersion = dIn.readInt();
 		if (clientVersion < Server.version) {
 			out.write(0x55);
 			dOut.writeInt(32);
 			out.write("Outdated client!".getBytes(StandardCharsets.UTF_16BE));
+			out.flush();
 			alive = false;
 			Server.level.ent[EID] = null;
 			socket.close();
@@ -132,6 +151,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			out.write(0x55);
 			dOut.writeInt(28);
 			out.write("Spawn blocked!".getBytes(StandardCharsets.UTF_16BE));
+			out.flush();
 			alive = false;
 			Server.level.ent[EID] = null;
 			socket.close();
@@ -194,6 +214,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			byte[] mB = message.getBytes("UTF-8");
 			out.write(new byte[]{(byte) (mB.length >>> 24), (byte) (mB.length >>> 16), (byte) (mB.length >>> 8), (byte) mB.length});
 			out.write(mB);
+			out.flush();
 		}
 		catch (Exception E) {
 			System.out.println("Player on " + socket + " was disconnected with reason: " + message);
