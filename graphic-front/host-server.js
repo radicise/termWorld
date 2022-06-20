@@ -44,9 +44,24 @@ let serverPassword = "password";
 class Host {
     constructor () {
         this.name = "DEFAULT SERVER";
-        this.turn_interval = 300;
+        const tiargv = argv.find(v => v.startsWith("--turnint="));
+        const mpargv = argv.find(v => v.startsWith("--maxplay="));
+        this.turn_interval = ((tiargv ? Number(tiargv.split("=")[1]) : null) ?? Number(process.env.turnint)) || 300;
+        this.max_players = ((mpargv ? Number(mpargv.split("=")[1]) : null) ?? Number(process.env.maxplay)) || 10;
         this.player_count = 0;
-        this.max_players = 0;
+        this.level_age = 0;
+        const lwargv = argv.find(v => v.startsWith("--lwidth="));
+        const lhargv = argv.find(v => v.startsWith("--lheight="));
+        this.level_width = ((lwargv ? Number(lwargv.split("=")[1]) : null) ?? Number(process.env.lwidth)) || 10;
+        this.level_height = ((lhargv ? Number(lhargv.split("=")[1]) : null) ?? Number(process.env.lheight)) || 10;
+        this.level_data = [];
+        for (let y = 0; y < this.level_height; y ++) {
+            let row = [];
+            for (let x = 0; x < this.level_width; x ++) {
+                row.push(0);
+            }
+            this.level_data.push(row);
+        }
         /**@type {{id:0|1|2,address:any,port:number}[]} */
         this.maintain_auths = [
             {
@@ -141,10 +156,15 @@ class Host {
                 socket.write([...bigToBytes(this.max_players, 2), ...bigToBytes(this.player_count, 2)]);
                 break;
             case 0x02:
+                socket.bundle();
                 socket.write(stringToBuffer(this.name.slice(0, 20)));
                 socket.write(bigToBytes(this.turn_interval, 2));
+                socket.write(bigToBytes(this.level_height, 8));
+                socket.write(bigToBytes(this.level_width, 8));
+                socket.flush();
                 break;
             case 0x03:
+                socket.bundle();
                 socket.write(this.maintain_auths.length & 0xff);
                 for (const server of this.maintain_auths) {
                     socket.write(server.id + 1);
@@ -163,6 +183,7 @@ class Host {
                     }
                     socket.write(bigToBytes(server.port, 2));
                 }
+                socket.flush();
                 break;
         }
         socket.end();

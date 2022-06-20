@@ -11,6 +11,7 @@ get static information:
 Client -> Host: 0x02
 Host -> Client: <serverName, String>
 Host -> Client: <turn interval in milliseconds, 2-byte integer>
+Host -> Client: <level height, 8-byte unsinged int> + <level width, 8-byte unsigned int>
 <disconnection>
 
 get auth servers:

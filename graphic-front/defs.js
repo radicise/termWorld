@@ -90,6 +90,10 @@ class NSocket extends Socket {
         this.ending = false;
         /**@private */
         this.use_cryptor = true;
+        /**@private */
+        this.do_flush = true;
+        /**@type {Buffer[]} @private */
+        this.bundled = [];
         const that = this;
         function rebind () {
             that.write = NSocket.prototype.write;
@@ -111,7 +115,32 @@ class NSocket extends Socket {
         socket.read = NSocket.prototype.read;
         socket.write = NSocket.prototype.write;
         socket.end = NSocket.prototype.end;
+        socket._wwrite = NSocket.prototype._wwrite;
+        socket.do_flush = true;
+        socket.cryptor = null;
+        socket.use_cryptor = true;
+        socket.ending = false;
+        socket.setCryptor = NSocket.prototype.setCryptor;
+        socket.setUseEncryption = NSocket.prototype.setUseEncryption;
+        socket.bundled = [];
+        socket.bundle = NSocket.prototype.bundle;
+        socket.flush = NSocket.prototype.flush;
         return socket;
+    }
+    /**
+     * bundles the {@link NSocket.write} commands until {@link NSocket.flush} is called
+     */
+    bundle () {
+        this.do_flush = false;
+    }
+    /**
+     * flushes the bundled {@link NSocket.write} commands
+     */
+    flush () {
+        this.do_flush = true;
+        if (this.bundled.length === 0) return;
+        this.write(Buffer.concat(this.bundled));
+        this.bundled = [];
     }
     /**
      * sets the internal cryptor
@@ -143,6 +172,14 @@ class NSocket extends Socket {
         this.write("",)
     }
     /**
+     * @param {Buffer} data
+     */
+    _wwrite (data) {
+        if (typeof data === "string" && !this.do_flush) return this.bundled.push(stringToBuffer(data, true));
+        if (!this.do_flush) return this.bundled.push(data);
+        this._owrite(data);
+    }
+    /**
      * writes data to the socket
      * 
      * note that when the internal cryptor is set the ```strIsUft8``` parameter becomes applicable
@@ -156,11 +193,11 @@ class NSocket extends Socket {
             data = this.cryptor.crypt(data, strIsUtf8);
         }
         if (typeof data === "string") {
-            this._owrite(data);
+            this._wwrite(data);
         } else if (typeof data === "number") {
-            this._owrite(Uint8Array.of(data & 0xff));
+            this._wwrite(Uint8Array.of(data & 0xff));
         } else {
-            this._owrite(Uint8Array.from(data));
+            this._wwrite(Uint8Array.from(data));
         }
         return new Promise((res, _) => {
             this.once("drain", res);
