@@ -289,14 +289,16 @@ public class Client {
 					else if (b == 6) {
 						i = Server.level.nextSlot();
 						Server.level.ent[i] = Entity.deserialize(dIn);
-						if (notFound) {//TODO Make this better
+						if (notFound && (Server.level.ent[i] != null)) {//TODO Make this better
 							if (oID == ((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y))) {
 								EID = i;
 								notFound = false;
 							}
 						}
-						Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) | ((long) Server.level.ent[i].x), i);
-						Server.level.entities.put((((long) Server.level.ent[i].x) << 32) | ((long) Server.level.ent[i].y), i);
+						if (Server.level.ent[i] != null) {
+							Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) | ((long) Server.level.ent[i].x), i);
+							Server.level.entities.put((((long) Server.level.ent[i].x) << 32) | ((long) Server.level.ent[i].y), i);
+						}
 					}
 					else if (b == 7) {
 						id = dIn.readLong();

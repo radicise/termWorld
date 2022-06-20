@@ -65,7 +65,7 @@ class EntityPlayer extends Entity {
 		}
 		return false;
 	}
-	synchronized void animate(int EID) throws Exception {
+	protected synchronized void animate(int EID) throws Exception {
 		if (checkDeath(EID)) {
 			return;
 		}

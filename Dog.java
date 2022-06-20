@@ -57,7 +57,7 @@ class Dog extends Entity {
 		}
 		return new Dog(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort(), inv);
 	}
-	void animate(int EID) throws Exception {
+	protected void animate(int EID) throws Exception {
 		if (checkDeath(EID)) {
 			return;
 		}

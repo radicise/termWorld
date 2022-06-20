@@ -19,7 +19,7 @@ public class EntityItem extends Entity {
 			color = 9;
 		}
 	}
-	void animate(int EID) {
+	protected void animate(int EID) {
 		health = 0;
 		if (data < 0) {
 			Server.level.entities.remove((((long) x) << 32) ^ ((long) y));

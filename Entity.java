@@ -2,19 +2,19 @@ package termWorld;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InvalidObjectException;
-class Entity {
-	int x;
-	int y;
-	short health;
-	volatile long data;
-	byte type = 0;
-	char face;
-	byte color;
-	int xO;
-	int yO;
-	Item[] inventory;
+public class Entity {
+	public int x;
+	public int y;
+	public short health;
+	public volatile long data;
+	public byte type = 0;
+	public char face;
+	public byte color;
+	protected int xO;
+	protected int yO;
+	public Item[] inventory;
 	static final int invSpace = 0;
-	Entity() {
+	protected Entity() {
 	}
 	Entity(int x, int y, long data, short health) {
 		inventory = new Item[invSpace];
@@ -29,6 +29,10 @@ class Entity {
 	}
 	void serialize(DataOutputStream dataOut) throws Exception {//TODO Include face value
 		dataOut.write(type);
+		if (type == 4) {//Supports plugin Entity-subclass objects without making serialization implementation a compulsory and redundant thing for the plugin
+			System.out.println("wefufhwhefBHJBHJBHJBHJJBHBH");
+			return;
+		}
 		dataOut.writeInt(x);
 		dataOut.writeInt(y);
 		dataOut.writeLong(data);
@@ -47,6 +51,8 @@ class Entity {
 				return EntityPlayer.fromDataStream(strm);
 			case (3):
 				return EntityItem.fromDataStream(strm);
+			case (4)://reserved for plugin Entity-subclass objects
+				return null;//a null return value signifies that the entity should be ignored
 			default:
 				throw new InvalidObjectException("Invalid Entity type");
 		}
@@ -60,7 +66,7 @@ class Entity {
 		Server.buf.put((byte) 7).putInt(x).putInt(y);
 		return true;
 	}
-	void animate(int EID) throws Exception {//,,,inventory,health,teleport,[reserved],face
+	protected void animate(int EID) throws Exception {//,,,inventory,health,teleport,[reserved],face
 		if (checkDeath(EID)) {
 			return;
 		}

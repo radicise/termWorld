@@ -174,23 +174,23 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		try {
 			while (true) {
 				n = in.read();
-				if ((n & 128) == 128) {
-					n &= 3;
-					synchronized (Server.level.ent[EID]) {
+				synchronized (Server.level.ent[EID]) {
+					if ((n & 128) == 128) {
+						n &= 3;
 						Server.level.ent[EID].data = ((Server.level.ent[EID].data & (~0xf)) ^ ((((Server.level.ent[EID].data) & (0x33 >>> (n & 2))) ^ ((n | 2) << (~(n | 0xfffffffd)))) & 0xf));
 					}
-				}
-				else {
-					switch (n) {
-						case (100):
-							Server.level.ent[EID].data |= 0x20;
-							break;
-						case (101):
-							Server.level.ent[EID].data |= 0x10;
-							break;
-						case (102):
-							Server.level.ent[EID].data |= 0x400;
-							break;
+					else {
+						switch (n) {
+							case (100):
+								Server.level.ent[EID].data |= 0x20;
+								break;
+							case (101):
+								Server.level.ent[EID].data |= 0x10;
+								break;
+							case (102):
+								Server.level.ent[EID].data |= 0x400;
+								break;
+						}
 					}
 				}
 			}

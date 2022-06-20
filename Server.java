@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.locks.ReentrantLock;
+import java.lang.reflect.Method;
 public class Server {
 	static ReentrantLock Locker = new ReentrantLock();
 	public static final int version = 2;
@@ -21,6 +22,7 @@ public class Server {
 	static int[] authsPorts;
 	public static volatile String levelname = "defaultLevel";
 	public static Level level = null;
+	public static ArrayList<Method> plugs = new ArrayList<Method>();
 	public static short turnInterval = 189;
 	static ArrayList<ConnectedPlayer> players = new ArrayList<ConnectedPlayer>();
 	static Long playerVal = new Long(0L);
@@ -65,6 +67,14 @@ public class Server {
 			System.out.println("An Exception has occurred: " + E);
 			System.exit(1);
 		}
+		int n = 0;
+		for (Method M : plugs) {
+			System.out.println("Loading plugin: " + M.toGenericString() + " in " + M.getDeclaringClass().getCanonicalName());
+			level = ((Level) M.invoke(null));
+			n++;
+			System.out.println("Plugin loaded");
+		}
+		System.out.println("Plugins loaded: " + n);
 		bstr = new DataOutputStream(new termWorld.ByteBufferOutputStream(buf));
 		ConnectedPlayer.initRandom();
 		ServerSocket server = new ServerSocket(port);

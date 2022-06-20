@@ -3,7 +3,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 public class Item {
-	enum Thing {
+	public enum Thing {
 		CLOTHPATCH('\u221e'),
 		WATERBOTTLE('\u00a1'),
 		STONE('o');
