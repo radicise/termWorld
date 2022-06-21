@@ -1,7 +1,7 @@
 const net = require("net");
 const { randomBytes, publicEncrypt, createPublicKey } = require("crypto");
 const dns_lookup = require("dns").lookup;
-const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp } = require("./defs");
+const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp, SAddr } = require("./defs");
 const { readFileSync, existsSync } = require("fs");
 const join_path = require("path").join;
 
@@ -93,7 +93,7 @@ class Host {
             }
             this.level_data.push(row);
         }
-        /**@type {{id:0|1|2,address:any,port:number}[]} */
+        /**@type {SAddr[]} */
         this.maintain_auths = [
             {
                 id:0,
@@ -159,34 +159,10 @@ class Host {
                 bundle.mkLog("successfully updated server secret");
                 sock.end();
             });
-            switch (addr.id) {
-                case 0:
-                    bundle.mkLog(`using IPv4 to connect to auth server: ip="${addr.address.join(".")}" port="${addr.port}"`);
-                    sock.connect(addr.port, addr.address.join("."));
-                    break;
-                case 1:
-                    let x = [];
-                    let b = "";
-                    for (let i = 0; i < 16; i += 2) {
-                        x.push(asHex([addr.address[i], addr.address[i+1]]));
-                    }
-                    x.forEach(v => {
-                        if (v !== "0000") {
-                            b += v;
-                        }
-                        b += ":";
-                    });
-                    bundle.mkLog(`using IPv6 to connect to auth server: ip="${x.slice(0, x.length-1)}" port="${addr.port}"`);
-                    sock.connect(addr.port, x.slice(0, x.length-1));
-                    break;
-                case 2:
-                    bundle.mkLog(`using DNS to connect to auth server: hostname="${addr.address}" port="${addr.port}"`);
-                    dns_lookup(addr.address, (e, a, _) => {
-                        if (e) {bundle.mkLog(`DNS LOOKUP FAILURE: ${e}`); return bundle.finish();}
-                        sock.connect(a, addr.port);
-                    });
-                    break;
-            }
+            vConnect(addr, sock, (ret, hadErr) => {
+                bundle.mkLog(ret);
+                if (hadErr) bundle.finish();
+            });
         }
     }
     /**

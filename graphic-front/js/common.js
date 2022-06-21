@@ -1,11 +1,11 @@
 const { ipcRenderer } = require("electron");
-const { NSocket } = require("../socket");
+const { NSocket, SAddr, vConnect } = require("../defs");
 const { writeFileSync, existsSync, mkdirSync } = require("fs");
 const join_path = require("path").join;
 
 /**
  * makes a tmp file
- * @param {{defaultData:string,path:string[]}} param0
+ * @param {{defaultData:string|number,path:string[]}} param0
  */
 function mkTmp ({defaultData, path}) {
     defaultData = defaultData ?? "";
@@ -14,7 +14,11 @@ function mkTmp ({defaultData, path}) {
         const p = join_path(__dirname, ...c);
         if (existsSync(p)) continue;
         if (p.includes(".")) {
-            writeFileSync(p, defaultData, {encoding:"utf-8"});
+            if (typeof defaultData === "number") {
+                writeFileSync(p, Buffer.of(defaultData));
+            } else {
+                writeFileSync(p, defaultData, {encoding:"utf-8"});
+            }
         } else {
             mkdirSync(p);
         }
@@ -32,9 +36,16 @@ function fatal_err (msg) {
     ipcRenderer.send("console:fatal", msg);
 }
 
+/**
+ * @param {string} filename
+ */
+function load_view (filename) {
+    send("load:view", filename);
+}
+
 class ServerDescriptor {
     /**
-     * describes server data
+     * describes host data
      * @param {{ server_name: string; host_ip: string; host_port: number; auth_ip: string; auth_port: number; profile_name: string; icon? : string}} param0 
      */
     constructor ({ server_name, host_ip, host_port, auth_ip, auth_port, profile_name, icon }) {
@@ -46,22 +57,6 @@ class ServerDescriptor {
         this.auth_ip = auth_ip;
         this.auth_port = auth_port;
         this.profile_name = profile_name;
-        // this.get_max_players = () => {
-        //     const erE = new Error();
-        //     return new Promise(async (res, _) => {
-        //         try {
-        //         await getLen(res, 0x01);
-        //         } catch (e) {e.stack+=erE.stack;throw e;}
-        //     });
-        // }
-        // this.get_connected_player_count = () => {
-        //     const erE = new Error();
-        //     return new Promise(async (res, _) => {
-        //         try {
-        //         await getLen(res, 0x02);
-        //         } catch (e) {e.stack+=erE.stack;throw e;}
-        //     });
-        // }
     }
     /**
      * @returns {Promise<number>}
@@ -105,10 +100,6 @@ class ServerDescriptor {
                 res([(len[0] << 8) | len[1], (len[2] << 8) | len[3]]);
             });
             } catch (e) {e.stack+=erE.stack;throw e;}
-            // let max;
-            // let cur;
-            // this.get_max_players().then(v => {max = v; if ((cur ?? false) === cur) {res([max, cur]);}}, reason => rej([0, reason]));
-            // this.get_connected_player_count().then(v => {cur = v; if ((max ?? false) === max) {res([max, cur]);}}, reason => rej([1, reason]));
         });
     }
     /**
@@ -120,10 +111,23 @@ class ServerDescriptor {
     }
 }
 
+/**
+ * @typedef ServerData
+ * @type {object}
+ * @property {string} [name] name of server
+ * @property {number} ip_format
+ * @property {any} ip
+ * @property {number} port
+ */
+
 exports.ServerDescriptor = ServerDescriptor;
+exports.ServerData = this.ServerData;
 exports.NSocket = NSocket;
+exports.SAddr = SAddr;
+exports.vConnect = vConnect;
 exports.log = log;
 exports.fatal_err = fatal_err;
 exports.send = ipcRenderer.send;
 exports.invoke = ipcRenderer.invoke;
+exports.load_view = load_view;
 exports.mkTmp = mkTmp;

@@ -590,9 +590,76 @@ function bytesToBig (bytes) {
     return f;
 }
 
+/**
+ * @typedef SAddr
+ * @type {{id:0|1|2,address:any,port:number}[]}
+ */
+
+/**
+ * resolves the given address
+ * @param {SAddr} addr address
+ * @returns {Promise<[string, string, boolean]>}
+ */
+function resolveServerAddr (addr) {
+    return new Promise ((res, _) => {
+        switch (addr.id) {
+            case 0:
+                return res([addr.address.join("."), `using IPv4 to connect: ip="${addr.address.join(".")}" port="${addr.port}"`, false]);
+            case 1:
+                let x = [];
+                let b = "";
+                for (let i = 0; i < 16; i += 2) {
+                    x.push(asHex([addr.address[i], addr.address[i+1]]));
+                }
+                x.forEach(v => {
+                    if (v !== "0000") {
+                        b += v;
+                    }
+                    b += ":";
+                });
+                return res([x.slice(0, x.length-1), `using IPv6 to connect: ip="${x.slice(0, x.length-1)}" port="${addr.port}"`, false]);
+            case 2:
+                dns_lookup(addr.address, (e, a, _) => {
+                    if (e) return res(["0.0.0.0", `DNS LOOKUP FAILURE: ${e}`, true]);
+                    res([a, `using DNS to connect: hostname="${addr.address}" port="${addr.port}"`, false]);
+                });
+        }
+    });
+}
+
+/**
+ * connects a socket to the given address
+ * @param {SAddr} addr address to connect to
+ * @param {NSocket} sock socket to connect with
+ * @param {(ret:string, hadErr:boolean) => void} cb callback for logs
+ * @returns {Promise<void>}
+ */
+function vConnect (addr, sock, cb) {
+    return new Promise((res, _) => {
+        resolveServerAddr(addr).then(([a, m, e]) => {
+            if (e) {res(); return cb(m, true);}
+            sock.connect(a, addr.port);
+            cb(m, false);
+            res();
+        });
+    });
+}
+
+/**
+ * eats ```count``` items from ```arr```
+ * @template T
+ * @param {T[]} arr array to eat from
+ * @param {number} count number of items to eat
+ * @returns {T[]}
+ */
+function eat (arr, count) {
+    return arr.splice(0, count);
+}
+
 exports.SymmetricCipher = SymmetricCipher;
 exports.NSocket = NSocket;
 exports.Logger = Logger;
+exports.SAddr = this.SAddr;
 exports.formatBuf = formatBuf;
 exports.stringToBuffer = stringToBuffer;
 exports.charsToBuffer = charsToBuffer;
@@ -604,3 +671,6 @@ exports.hash = hash;
 exports.bigToBytes = bigToBytes;
 exports.bytesToBig = bytesToBig;
 exports.mkTmp = mkTmp;
+exports.vConnect = vConnect;
+exports.eat = eat;
+exports.resolveServerAddr = resolveServerAddr;

@@ -1,7 +1,7 @@
-const { send, invoke, ServerDescriptor, mkTmp } = require("../js/common");
+const { send, invoke, load_view, ServerDescriptor, mkTmp, NSocket } = require("../js/common");
 const { readFileSync, writeFileSync } = require("fs");
 // import { read } from "../block-read";
-const { NSocket } = require("../socket");
+// const { NSocket } = require("../defs");
 // const Socket = require("net").Socket;
 const join_path = require("path").join;
 
@@ -81,7 +81,7 @@ reloadServers();
 
 
 document.getElementById("back-btn").addEventListener("click", () => {
-    send("load:view", "title");
+    load_view("title");
 });
 
 document.getElementById("add-server-btn").addEventListener("click", () => {

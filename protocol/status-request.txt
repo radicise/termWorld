@@ -1,6 +1,12 @@
-for Hosts:
+Client -> Server: 0x64
 
-Client -> Host: 0x64
+for requesting server type:
+Client -> Server: 0x00
+Server -> Client: 0x01 if Host, 0x02 if Auth
+<NO DISSCONECTION>
+
+
+for Hosts:
 
 get current information:
 Client -> Host: 0x01
