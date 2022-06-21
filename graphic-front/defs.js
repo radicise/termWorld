@@ -278,18 +278,21 @@ class NSocket extends Socket {
 /**
  * converts a string to a buffer of the bytes that the string is made from
  * @param {string | Buffer} str string to convert
- * @param {boolean} [asutf8] whether to return in uft-8
+ * @param {boolean} [asascii] whether to return in ASCII
  * @param {number} [padto] length to pad to, default no padding
  * @param {number} [padwith] what to pad the buffer with
  * @returns {Buffer}
  */
-function stringToBuffer (str, asutf8, padto, padwith) {
+function stringToBuffer (str, asascii, padto, padwith) {
     if (Buffer.isBuffer(str)) return str;
     let f = [];
     for (let i = 0; i < str.length; i ++) {
         const x = str.charCodeAt(i);
-        if (!asutf8) {
+        if (!asascii) {
             f.push((x & 0xff00) >> 8);
+        }
+        else if (f > 127) {
+            continue;
         }
         f.push(x & 0xff);
     }

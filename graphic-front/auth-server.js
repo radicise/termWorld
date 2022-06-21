@@ -51,12 +51,12 @@ let [publicKey, privateKey] = generateKeyPair();
 
 let userIdDb = {
     "0000000000000000" : ["a", hash(Buffer.concat([stringToBuffer("a", false, 32, 0x20), Buffer.alloc(8, 0)]))],
-    "0000000000000005" : ["guest", hash(Buffer.concat([stringToBuffer("password"), Buffer.from([0, 0, 0, 0, 0, 0, 0, 5])]))],
+    "0000000000000005" : ["guest", hash(Buffer.concat([stringToBuffer("password", false, 32, 0x20), Buffer.from([0, 0, 0, 0, 0, 0, 0, 5])]))],
 };
 
 let serverIdDb = {
-    "0000000000000000" : [Buffer.from(hash(Buffer.concat([stringToBuffer("password"), Buffer.alloc(8, 0)]))), Buffer.alloc(32, 0)],
-    "0000000000000001" : [Buffer.from(hash(Buffer.concat([stringToBuffer("password"), Buffer.from([0, 0, 0, 0, 0, 0, 0, 1])]))), Buffer.from([0x58, 0xe0, 0xd3, 0x14, 0x41, 0xd0, 0xe6, 0x6e, 0x8b, 0xa4, 0xf1, 0xd3, 0x4b, 0xc6, 0x46, 0x76, 0x10, 0xa7, 0x2f, 0x22, 0xbd, 0x04, 0x53, 0x2b, 0xf1, 0x8f, 0x0b, 0xb3, 0x35, 0xac, 0x72, 0xb0])],
+    "0000000000000000" : [Buffer.from(hash(Buffer.concat([stringToBuffer("password", false, 32, 0x20), Buffer.alloc(8, 0)]))), Buffer.alloc(32, 0)],
+    "0000000000000001" : [Buffer.from(hash(Buffer.concat([stringToBuffer("password", false, 32, 0x20), Buffer.from([0, 0, 0, 0, 0, 0, 0, 1])]))), Buffer.from([0x58, 0xe0, 0xd3, 0x14, 0x41, 0xd0, 0xe6, 0x6e, 0x8b, 0xa4, 0xf1, 0xd3, 0x4b, 0xc6, 0x46, 0x76, 0x10, 0xa7, 0x2f, 0x22, 0xbd, 0x04, 0x53, 0x2b, 0xf1, 0x8f, 0x0b, 0xb3, 0x35, 0xac, 0x72, 0xb0])],
 }
 
 let socketIDS = 0;
@@ -114,7 +114,6 @@ const server = net.createServer(
             const nonce0 = buf.slice(8, 40);
             const ghash = buf.slice(40, 72);
             let h2 = Array.from(userIdDb[uID][1]);
-            for (let i = h2.length; i < 32; i ++) h2.push(0x20);
             const h1 = hash(Buffer.concat([Buffer.from(h2), nonce1, charsToBuffer(uID)]));
             // console.log(`${formatBuf(h2)}\n${formatBuf(nonce1)}\n${formatBuf(charsToBuffer(uID))}`);
             // console.log(`${formatBuf(h1)}\n${formatBuf(ghash)}`);
