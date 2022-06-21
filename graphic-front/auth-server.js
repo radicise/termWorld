@@ -135,12 +135,11 @@ const server = net.createServer(
             logger.mkLog(`${usingID} was authenticated` + (unsafe_logs ? ` computed hash = ${logger.formatBuf(b)}` : ""));
             socket.write(b);
         } else if (buf === 0x32) {
-            const exp = stringToBuffer(publicKey.export({type:"spki",format:"pem"}), true);
+            const exp = publicKey.export({type:"pkcs1", format:"der"});
             socket.write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
             socket.write(exp);
             buf = await socket.read(4);
             const buf2 = await socket.read(buf[0] << 8 | buf[1]);
-            console.log(buf2);
             const password = privateDecrypt(privateKey, Buffer.from(buf2)).toString("utf-8");
             buf = await socket.read(buf[2] << 8 | buf[3]);
             if (password !== process.env.AUTH_ADMIN) {
@@ -149,7 +148,7 @@ const server = net.createServer(
                 return;
             }
             socket.write(0x00);
-            const clientPub = createPublicKey(Buffer.from(buf));
+            const clientPub = createPublicKey({"key" : Buffer.from(buf), "format" : "der", "type" : "pkcs1"});
             const symmetricKey = randomBytes(32);
             const encrypted = publicEncrypt(clientPub, symmetricKey);
             socket.write([(encrypted.length & 0xff00) >> 8, encrypted.length & 0xff]);
@@ -217,7 +216,7 @@ const server = net.createServer(
                 return;
             }
             socket.write(0x63);
-            const exp = stringToBuffer(publicKey.export({format:"pem",type:"spki"}), true);
+            const exp = publicKey.export({type:"pkcs1", format:"der"});
             socket.write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
             socket.write(exp);
             buf = await socket.read(2);

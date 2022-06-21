@@ -1,7 +1,7 @@
 const net = require("net");
 const { randomBytes, publicEncrypt, createPublicKey } = require("crypto");
 const dns_lookup = require("dns").lookup;
-const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp, SAddr } = require("./defs");
+const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp } = require("./defs");
 const { readFileSync, existsSync } = require("fs");
 const join_path = require("path").join;
 
@@ -93,7 +93,7 @@ class Host {
             }
             this.level_data.push(row);
         }
-        /**@type {SAddr[]} */
+        /**@type {{id:0|1|2,address:any,port:number}[]} */
         this.maintain_auths = [
             {
                 id:0,
@@ -148,21 +148,45 @@ class Host {
                 sock.write([0x33, ...serverID]);
                 if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: auth server did not recognize server ID"); return sock.end();}
                 const nonce0 = await sock.read(32);
-                sock.write(hash(Buffer.concat([Buffer.from(hash(Buffer.concat([stringToBuffer(serverPassword), Buffer.from(serverID)]))), Buffer.from(nonce0)])));
+                sock.write(hash(Buffer.concat([Buffer.from(hash(Buffer.concat([stringToBuffer(serverPassword, false, 32, 0x20), Buffer.from(serverID)]))), Buffer.from(nonce0)])));
                 if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: invalid server password"); return sock.end();}
                 let buf = await sock.read(2);
                 buf = await sock.read((buf[0] << 8) | buf[1]);
-                const ret = publicEncrypt(createPublicKey(Buffer.from(buf).toString("utf-8")), this.secret);
+                const ret = publicEncrypt(createPublicKey({"key" : Buffer.from(buf), "format" : "der", "type" : "pkcs1"}), this.secret);
                 sock.write([(ret.length & 0xff00) >> 8, ret.length & 0xff]);
                 sock.write(ret);
                 if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: unknown reason"); return sock.end();}
-                bundle.mkLog("successfully updated server secret");
+                bundle.mkLog(`successfully updated server secret for auth server at ${["IPv4", "IPv6", "hostname"][addr.id]} ${addr.address} port ${addr.port}` + (unsafe_logs ? ` to ${formatBuf(this.secret)}` : ""));
                 sock.end();
             });
-            vConnect(addr, sock, (ret, hadErr) => {
-                bundle.mkLog(ret);
-                if (hadErr) bundle.finish();
-            });
+            switch (addr.id) {
+                case 0:
+                    bundle.mkLog(`using IPv4 to connect to auth server: ip="${addr.address.join(".")}" port="${addr.port}"`);
+                    sock.connect(addr.port, addr.address.join("."));
+                    break;
+                case 1:
+                    let x = [];
+                    let b = "";
+                    for (let i = 0; i < 16; i += 2) {
+                        x.push(asHex([addr.address[i], addr.address[i+1]]));
+                    }
+                    x.forEach(v => {
+                        if (v !== "0000") {
+                            b += v;
+                        }
+                        b += ":";
+                    });
+                    bundle.mkLog(`using IPv6 to connect to auth server: ip="${x.slice(0, x.length-1)}" port="${addr.port}"`);
+                    sock.connect(addr.port, x.slice(0, x.length-1));
+                    break;
+                case 2:
+                    bundle.mkLog(`using DNS to connect to auth server: hostname="${addr.address}" port="${addr.port}"`);
+                    dns_lookup(addr.address, (e, a, _) => {
+                        if (e) {bundle.mkLog(`DNS LOOKUP FAILURE: ${e}`); return bundle.finish();}
+                        sock.connect(a, addr.port);
+                    });
+                    break;
+            }
         }
     }
     /**
