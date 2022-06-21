@@ -1,27 +1,27 @@
 const { publicEncrypt, privateDecrypt, createPublicKey } = require("crypto");
-const { NSocket, formatBuf, SymmetricCipher, generateKeyPair, stringToBuffer, hash, asHex } = require("./defs");
+const { NSocket, formatBuf, SymmetricCipher, generateKeyPair, stringToBuffer, hash, asHex, bytesToBig, bufferToString } = require("./defs");
 
 let [publicKey, privateKey] = generateKeyPair();
 
 const clientID = Array.from(Buffer.alloc(8, 0));
-const userName = Array.from(Buffer.alloc(32, 0));
-const password = Array.from(Buffer.alloc(32, 0));
+const userName = Array.from(stringToBuffer("a", false, 32, 0x20));
+const password = Array.from(stringToBuffer("a", false, 32, 0x20));
 
 const port = [15651, 15652];
 const host = ["127.0.0.1", "127.0.0.1"];
 
-let c = 1;
+let c = 0;
 
 let auth = new NSocket();
-// let server = new net.Socket();
+let server = new NSocket();
 
 // const cv = "0123456789abcdef";
 // const asHex = (a) => a.map(v => cv[v >> 4] + cv[v & 0x0f]);
 
 auth.connect(port[1], host[1], () => {if(c){start();}c=1;});
-// server.connect(port[0], host[0], () => {if(c){start();}c=1;});
+server.connect(port[0], host[0], () => {if(c){start();}c=1;});
 
-async function start3 () {
+async function start2 () {
     auth.write([0x33, 1, 0, 0, 0, 0, 0, 0, 1]);
     if ((await auth.read(1))[0] === 0x55) {
         console.log("server not exist");
@@ -46,7 +46,7 @@ async function start3 () {
     console.log("success");
 }
 
-async function start () {
+async function start3 () {
     auth.write(0x32);
     let buf = await read(auth, 2);
     // console.log(buf);
@@ -91,41 +91,53 @@ async function start () {
     enwrite(0x00);
 }
 
-async function start2 () {
-    server_write(userName);
+async function start () {
+    server.write(0x63);
+    server.write(userName);
     let buf = [];
-    buf = await read(server, 40);
-    console.log(buf);
+    buf = await server.read(40);
+    // console.log(buf);
     const nonce0 = buf.slice(0, 32);
     const serverID = buf.slice(32, 40);
-    auth_write([0x63, ...clientID]);
-    buf = await read(auth, 1);
-    console.log(asHex(buf));
+    auth.write([0x63, ...clientID]);
+    buf = await auth.read(1);
+    // console.log(asHex(buf));
     if (buf[0] === 0x55) {
         return;
     }
-    buf = await read(auth, 32);
-    console.log(asHex(buf));
+    buf = await auth.read(32);
+    // console.log(asHex(buf));
     const nonce1 = buf;
-    auth_write([...serverID, ...nonce0, ...hash([...password, ...nonce1, ...clientID])]);
-    buf = await read(auth, 1);
+    const h = hash([...hash(Buffer.concat([Buffer.from(password), Buffer.from(clientID)])), ...nonce1, ...clientID]);
+    // console.log(formatBuf(h));
+    auth.write([...serverID, ...nonce0, ...h]);
+    buf = await auth.read(1);
     // console.log(asHex(buf)[0]);
     if (buf[0] == 0x55) {
         console.log("bad secret");
         return;
     }
-    buf = await read(auth, 1);
+    buf = await auth.read(1);
     if (buf[0] === 0x55) {
         console.log("no server");
         return;
     }
-    buf = await read(auth, 32);
-    console.log(buf);
+    buf = await auth.read(32);
     const authHash = buf;
-    server_write([...userName, ...clientID, ...authHash]);
-    buf = await read(server, 1);
+    server.write([...userName, ...clientID, ...authHash]);
+    buf = await server.read(1);
     if (buf[0] === 0x55) {
         console.log("server rejection");
+        return;
+    }
+    await server.read(1);
+    server.write(0x00);
+    if ((await server.read(1))[0] === 0x55) {
+        const bytes = await server.read(4);
+        const len = bytesToBig(bytes);
+        const msg = bufferToString(await server.read(len));
+        console.log("failed");
+        console.log(msg);
         return;
     }
     console.log("authenticated");

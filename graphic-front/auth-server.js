@@ -2,7 +2,7 @@ require("dotenv").config();
 const net = require("net");
 const { randomBytes, publicEncrypt, privateDecrypt, createPublicKey } = require("crypto");
 const { NSocket, stringToBuffer, charsToBuffer, reduceToHex, asHex, generateKeyPair, SymmetricCipher, hash, Logger, formatBuf } = require("./defs");
-const { read } = require("./block-read");
+// const { read } = require("./block-read");
 // const { stringToBuffer, charsToBuffer, reduceToHex, asHex } = require("./string-to-buf");
 // const { generateKeyPair, symmetricEncrypt, symmetricDecrypt } = require("./keygen");
 // const { SymmetricCipher } = require("./encryption");
@@ -92,8 +92,10 @@ const server = net.createServer(
         socketIDS ++;
         let buf;
         logger.mkLog(`connection: ${usingID}, waiting for op`);
-        buf = await socket.read(1, {format:"number"});
-        logger.mkLog(`${usingID} recieved opid: ${asHex(buf[0])}`);
+        // buf = await socket.read(1, {format:"number"});
+        buf = (await socket.read(1))[0];
+        // console.log(formatBuf(buf));
+        logger.mkLog(`${usingID} recieved opid: ${asHex(buf)}`);
         if (buf === 0x63) {
             buf = await socket.read(8);
             const uID = reduceToHex(buf);
@@ -133,7 +135,7 @@ const server = net.createServer(
             const b = Buffer.from(hash(Buffer.concat([Buffer.from(h), Buffer.from(nonce0), serverIdDb[targetSID][1], charsToBuffer(uID)])));
             logger.mkLog(`${usingID} was authenticated` + (unsafe_logs ? ` computed hash = ${logger.formatBuf(b)}` : ""));
             socket.write(b);
-        } else if (buf[0] === 0x32) {
+        } else if (buf === 0x32) {
             const exp = stringToBuffer(publicKey.export({type:"spki",format:"pem"}), true);
             socket.write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
             socket.write(exp);
@@ -195,7 +197,8 @@ const server = net.createServer(
                 if (breakout) break;
             }
             console.log("exited");
-        } else if (buf[0] === 0x33) {
+        } else if (buf === 0x33) {
+            // console.log("X");
             const SID = await socket.read(8);
             logger.mkLog(`${usingID} has identified as server "${formatBuf(SID)}" with op for server secret update`);
             if (!(reduceToHex(SID) in serverIdDb)) {

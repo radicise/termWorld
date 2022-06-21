@@ -1,7 +1,13 @@
 const net = require("net");
 const { randomBytes, publicEncrypt, createPublicKey } = require("crypto");
 const dns_lookup = require("dns").lookup;
-const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes } = require("./defs");
+const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp } = require("./defs");
+const { readFileSync, existsSync } = require("fs");
+const join_path = require("path").join;
+
+const plugin_reg_path = join_path(__dirname, "data", "server", "plugins.json");
+
+mkTmp(["data", "server", "plugins.json"], "{}");
 
 const argv = process.argv;
 
@@ -41,6 +47,22 @@ const port = 15651;
 const serverID = Array.from(Buffer.alloc(8, 0));
 let serverPassword = "password";
 
+
+/**
+ * @typedef ServerPlugin
+ * @type {object}
+ * @property {number} service_register provides boolean indication of what services the plugin provides and therefore what it needs to listen to
+ * 
+ * BITS (0 is rightmost):
+ * 
+ * 0 - denyPlayerLogin
+ * 
+ * 1 - spawnObstructionResolver
+ * @property {(name:string,id:number[]) => [boolean, string]} [denyPlayerLogin] checks if a player login should be denied
+ * @property {() => boolean} [spawnObstructionResolver] attempts to resolve player spawn obstruction. returns true on success and false otherwise NOT FULLY DEFINED YET
+ */
+
+
 class Host {
     constructor () {
         this.name = "DEFAULT SERVER";
@@ -48,13 +70,22 @@ class Host {
         const mpargv = argv.find(v => v.startsWith("--maxplay="));
         this.turn_interval = ((tiargv ? Number(tiargv.split("=")[1]) : null) ?? Number(process.env.turnint)) || 300;
         this.max_players = ((mpargv ? Number(mpargv.split("=")[1]) : null) ?? Number(process.env.maxplay)) || 10;
-        this.player_count = 0;
+        /**@type {NSocket[]} */
+        this.connected = [];
         this.level_age = 0;
         const lwargv = argv.find(v => v.startsWith("--lwidth="));
         const lhargv = argv.find(v => v.startsWith("--lheight="));
         this.level_width = ((lwargv ? Number(lwargv.split("=")[1]) : null) ?? Number(process.env.lwidth)) || 10;
         this.level_height = ((lhargv ? Number(lhargv.split("=")[1]) : null) ?? Number(process.env.lheight)) || 10;
         this.level_data = [];
+        /**@type {ServerPlugin[]} */
+        this.plugins = [];
+        this.listeners = {
+            /**@type {ServerPlugin[]} */
+            checkPlayerDeny : [],
+            /**@type {Function[]} */
+            spawnObstructionResolver : [],
+        };
         for (let y = 0; y < this.level_height; y ++) {
             let row = [];
             for (let x = 0; x < this.level_width; x ++) {
@@ -73,6 +104,30 @@ class Host {
         /**@type {Buffer} */
         this.secret;
         this.regenerateSecret();
+        this.reloadPlugins();
+    }
+    /**
+     * reloads the server plugins
+     */
+    reloadPlugins () {
+        this.plugins = [];
+        this.listeners.checkPlayerDeny = [];
+        this.listeners.spawnObstructionResolver = [];
+        /**@type {{dir:string,plugins:string[]}} */
+        const plugs = JSON.parse(readFileSync(plugin_reg_path, {encoding:"utf-8"}));
+        // plugin defs weren't found
+        if (!plugs.dir) return;
+        for (const name of plugs.plugins) {
+            const p = join_path(__dirname, "data", "server", plugs.dir, name);
+            if (!existsSync(p)) continue;
+            const { Plugin } = require(`./data/server/${plugs.dir}/${name}`);
+            /**@type {ServerPlugin} */
+            const plugin = new Plugin();
+            this.plugins.push(plugin);
+            if (plugin.service_register & 1) {
+                this.listeners.checkPlayerDeny.push(plugin);
+            }
+        }
     }
     /**
      * @private
@@ -135,9 +190,57 @@ class Host {
         }
     }
     /**
+     * checks if a player should be denied access even with valid auth eg: player was banned
+     * @param {string} name name of player
+     * @param {number[]} id player id
+     * @returns {[boolean, string]}
+     */
+    checkPlayerDeny (name, id) {
+        for (const check of this.listeners.checkPlayerDeny) {
+            const km = check.denyPlayerLogin(name, id);
+            if (km[0]) {
+                return km;
+            }
+        }
+        return [false, ""];
+    }
+    /**
      * @param {NSocket} socket
      */
     async socketJoinServer (socket) {
+        const name = bufferToString(await socket.read(32));
+        const nonce0 = randomBytes(32);
+        socket.bundle();
+        socket.write(nonce0);
+        socket.write(serverID);
+        socket.flush();
+        const authdata = await socket.read(72);
+        const ahash = authdata.slice(40, 72);
+        const checkhash = hash(Buffer.concat([Buffer.from(authdata.slice(0, 32)), nonce0, this.secret, Buffer.from(authdata.slice(32, 40))]));
+        if (checkhash.some((v, i) => v !== ahash[i])) {
+            socket.write(0x55);
+            socket.end();
+        } else {
+            socket.write([0x63, 0x00]);
+            await socket.read(1);
+            const km = this.checkPlayerDeny(name, authdata.slice(32, 40));
+            if (km[0] ?? false) {
+                const bufmsg = stringToBuffer(km[1] ?? "reason not provided");
+                socket.bundle();
+                socket.write(0x55);
+                socket.write(bigToBytes(bufmsg.length, 4));
+                socket.write(bufmsg);
+                socket.flush();
+                return socket.end();
+            }
+            socket.write(0x63);
+            const remAddr = socket.remoteAddress;
+            socket.on("cClose", () => {
+                this.connected.splice(this.connected.findIndex(v => v.remoteAddress === remAddr), 1);
+            });
+            this.connected.push(socket);
+        }
+        // socket.write([nonce0, ...serverID]);
         return;
     }
     /**
@@ -153,7 +256,7 @@ class Host {
         const statusid = await socket.read(1, {format:"number"});
         switch (statusid) {
             case 0x01:
-                socket.write([...bigToBytes(this.max_players, 2), ...bigToBytes(this.player_count, 2)]);
+                socket.write([...bigToBytes(this.max_players, 2), ...bigToBytes(this.connected.length, 2)]);
                 break;
             case 0x02:
                 socket.bundle();
@@ -203,36 +306,3 @@ class Host {
 const host = new Host();
 
 const server = net.createServer((socket) => {host.socketConnection(NSocket.from(socket))}).listen(port);
-
-/**
-const server = net.createServer(
-    async (socket) => {
-        socket = NSocket.from(socket);
-        socket.on("error", (err) => {});
-        const initopid = (await socket.read(1))[0];
-        if (initopid === 0x00) return;
-        if (initopid === 0x64) {
-            const statusid = (await socket.read(1))[0];
-            if (statusid === 0x01) {
-                socket.write([(host.max_players & 0xff00) >> 8, host.max_players & 0xff, (host.player_count & 0xff00) >> 8, host.player_count & 0xff]);
-            }
-            if (statusid === 0x02) {
-                socket.write();
-            }
-            socket.end();
-            return;
-        }
-        if (initopid === 0x63) {
-            console.log("waiting for username");
-            buf = await read(socket, 32);
-            console.log(formatBuf(buf));
-            socket.write([...Array.from(randomBytes(32)), ...serverID]);
-            buf = await read(socket, 48);
-            console.log(formatBuf(buf));
-            socket.write(0x63);
-            socket.end();
-            return;
-        }
-    }
-).listen(port);
-*/

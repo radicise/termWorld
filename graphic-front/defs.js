@@ -138,9 +138,10 @@ class NSocket extends Socket {
      */
     flush () {
         this.do_flush = true;
-        if (this.bundled.length === 0) return;
+        if (this.bundled.length === 0) return true;
         this.write(Buffer.concat(this.bundled));
         this.bundled = [];
+        return false;
     }
     /**
      * sets the internal cryptor
@@ -164,12 +165,15 @@ class NSocket extends Socket {
     end (cb) {
         cb = cb || (() => {});
         this.ending = true;
-        if (this.writableFinished) {
+        let x = true;
+        if (!this.do_flush) {
+            x = this.flush();
+        }
+        if (this.writableFinished && x) {
             return this._oend(cb);
         }
         this.once("drain", () => {this._oend(cb)});
         this.emit("cClose");
-        this.write("",)
     }
     /**
      * @param {Buffer} data
@@ -233,8 +237,8 @@ class NSocket extends Socket {
                 buf = options?.default ?? Buffer.of(0x00);
             }
             if (buf !== null) {
-                if (this.cryptor !== null && this.cryptor !== undefined && this.use_cryptor) {
-                    data = this.cryptor.crypt(data, strIsUtf8);
+                if (that.cryptor !== null && that.cryptor !== undefined && that.use_cryptor) {
+                    data = that.cryptor.crypt(data, strIsUtf8);
                 }
                 switch (options?.format) {
                     case "number":
@@ -254,7 +258,7 @@ class NSocket extends Socket {
                         } else if (options.encoding === "ascii") {
                             r(buf.toString("ascii"));
                         } else {
-                            r()
+                            r(bufferToString(buf));
                         }
                         break;
                     default:
@@ -335,7 +339,7 @@ function charsToBuffer (str) {
  * @param {number|number[]|Buffer}n thing to convert
  * @returns {string}
  */
- function asHex (n) {
+function asHex (n) {
     n = Buffer.isBuffer(n) ? Array.from(n) : n;
     if (!Array.isArray(n)) {
         return c[n >> 4] + c[n & 0x0f];
@@ -348,19 +352,22 @@ function charsToBuffer (str) {
  * @param {number[]|Buffer} buf buffer to reduce
  * @returns {string}
  */
- function reduceToHex (buf) {
+function reduceToHex (buf) {
+    buf = Buffer.isBuffer(buf) ? Array.from(buf) : buf;
     return buf.map(v => c[v >> 4]+c[v & 0x0f]).join("");
 }
 
 /**
  * formats a buffer as a string
- * @param {Buffer | number[]} buf buffer to format
+ * @param {Buffer | number[] | number} buf buffer to format
  * @returns {string}
  */
 function formatBuf (buf) {
+    buf = typeof buf === "number" ? [buf] : buf;
     if (Buffer.isBuffer(buf)) {
         buf = Array.from(buf);
     }
+    // console.log(buf);
     return `<Buffer ${(Array.isArray(buf)?buf:Array.from(buf)).map(v => c[v >> 4] + c[v & 0x0f]).toString().split(",").join(" ")}>`;
 }
 
@@ -449,21 +456,29 @@ class LogBundler {
     }
 }
 
+/**
+ * @param {string[]} path
+ * @param {string} [defaultVal]
+ */
+function mkTmp (path, defaultVal) {
+    for (let i = 1; i < path.length; i ++) {
+        const p = join_path(__dirname, ...path.slice(0, i));
+        if (!existsSync(p)) {
+            if (i === path.length - 1) {
+                writeFileSync(p, defaultVal ?? "", {encoding:"utf-8"});
+            } else {
+                mkdirSync(p);
+            }
+        }
+    }
+}
+
 class Logger {
     /**
      * @param {string[]} path
      */
     constructor (...path) {
-        for (let i = 1; i < path.length; i ++) {
-            const p = join_path(__dirname, ...path.slice(0, i));
-            if (!existsSync(p)) {
-                if (i === path.length - 1) {
-                    writeFileSync(p, "", {encoding:"utf-8"});
-                } else {
-                    mkdirSync(p);
-                }
-            }
-        }
+        mkTmp(path);
         this.path = join_path(__dirname, ...path);
         this.no_logging = false;
     }
@@ -570,7 +585,7 @@ function bigToBytes (big, byte_count) {
 function bytesToBig (bytes) {
     let f = 0;
     for (let i = bytes.length - 1; i >= 0; i --) {
-        f = f | (bytes[i] << (i * 8));
+        f = f | (bytes[i] << (((bytes.length - 1) - i) * 8));
     }
     return f;
 }
@@ -588,3 +603,4 @@ exports.generateKeyPair = generateKeyPair;
 exports.hash = hash;
 exports.bigToBytes = bigToBytes;
 exports.bytesToBig = bytesToBig;
+exports.mkTmp = mkTmp;
