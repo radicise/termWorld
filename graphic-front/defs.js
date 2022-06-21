@@ -641,7 +641,7 @@ function vConnect (addr, sock, cb) {
     return new Promise((res, _) => {
         resolveServerAddr(addr).then(([a, m, e]) => {
             if (e) {res(); return cb(m, true);}
-            sock.connect(a, addr.port);
+            sock.connect(addr.port, a);
             cb(m, false);
             res();
         });
