@@ -114,7 +114,6 @@ const server = net.createServer(
             const nonce0 = buf.slice(8, 40);
             const ghash = buf.slice(40, 72);
             let h2 = Array.from(userIdDb[uID][1]);
-            console.log(h2);
             const h1 = hash(Buffer.concat([Buffer.from(h2), nonce1, charsToBuffer(uID)]));
             // console.log(`${formatBuf(h2)}\n${formatBuf(nonce1)}\n${formatBuf(charsToBuffer(uID))}`);
             // console.log(`${formatBuf(h1)}\n${formatBuf(ghash)}`);
