@@ -186,7 +186,7 @@ class NSocket extends Socket {
     /**
      * writes data to the socket
      * 
-     * note that when the internal cryptor is set the ```strIsUft8``` parameter becomes applicable
+     * note that when the internal cryptor is set the ```strIsUtf8``` parameter becomes applicable
      * @param {string | number | Buffer | number[]} data data to write
      * @param {boolean} [strIsUtf8] passed through to the internal cryptor if applicable see {@link SymmetricCipher.crypt} for more info
      * @returns {Promise<void>}
@@ -204,7 +204,7 @@ class NSocket extends Socket {
             this._wwrite(Uint8Array.from(data));
         }
         return new Promise((res, _) => {
-            this.once("drain", res);
+            this.once("drain", res);//TODO excuse me if this is a dumb question / there is no problem, but what if the event triggers before the listener is started?
         });
     }
     //{{default?:number|number[]|Buffer,format?:"number"|"array"|"buffer"|"string",encoding?:"utf-8"|"utf8"|"utf-16"|"utf16"}}

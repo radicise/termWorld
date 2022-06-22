@@ -4,7 +4,7 @@ const dns_lookup = require("dns").lookup;
 const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp, SAddr, vConnect} = require("./defs");
 const { readFileSync, existsSync } = require("fs");
 const join_path = require("path").join;
-
+const gameVersion = 2;//update upon update
 const plugin_reg_path = join_path(__dirname, "data", "server", "plugins.json");
 
 mkTmp(["data", "server", "plugins.json"], "{}");
@@ -62,7 +62,48 @@ let serverPassword = "password";
  * @property {() => boolean} [spawnObstructionResolver] attempts to resolve player spawn obstruction. returns true on success and false otherwise NOT FULLY DEFINED YET
  */
 
-
+class Entity {
+    /**
+     * 
+     * @param {number} xPos
+     * @param {number} yPos
+     */
+    constructor(xPos, yPos) {
+        this.etype = 0;
+        this.x = xPos;
+        this.y = yPos;
+        this.termColor = 16;
+        this.health = 10
+    }
+    /**
+     * serializes level data to a given buffer
+     * @param {Buffer} buf buffer to write serialized data to
+     * @param {number} off offset in buffer
+     * @returns {number} amount of bytes written
+     */
+    serialize (buf, off) {
+        buf.writeUInt8(this.etype, off);
+        off++;
+        if (etype == 4) {
+            return off;
+        }
+        else if (etype == 2) {
+            //TODO serialize the inventory
+        }
+        buf.writeUInt32BE(this.x, off);
+        off += 4;
+        buf.writeUInt32BE(this.y, off);
+        off += 4;
+        if (type == 3) {
+            //TODO serialize item data
+        }
+        buf.writeBigInt64BE(BigInt((this.termColor & 0xf) << 6));
+        off += 8;
+        buf.writeInt16BE(this.health);
+        off += 2; 
+        return off;
+    }
+}
 class Host {
     constructor () {
         this.name = "DEFAULT SERVER";
@@ -72,9 +113,15 @@ class Host {
         this.max_players = ((mpargv ? Number(mpargv.split("=")[1]) : null) ?? Number(process.env.maxplay)) || 10;
         /**@type {NSocket[]} */
         this.connected = [];
+        /**@type {Entity[]} */
+        this.entities = [];
         this.level_age = 0;
+        const lsxargv = argv.find(v => v.startsWith("--lspawnx="));
+        const lsyargv = argv.find(v => v.startsWith("--lspawny="));
         const lwargv = argv.find(v => v.startsWith("--lwidth="));
         const lhargv = argv.find(v => v.startsWith("--lheight="));
+        this.level_spawnx = ((lsxargv ? Number(lsxargv.split("=")[1]) : null) ?? Number(process.env.lspawnx)) || 1;
+        this.level_spawny = ((lsyargv ? Number(lsyargv.split("=")[1]) : null) ?? Number(process.env.lspawny)) || 1;
         this.level_width = ((lwargv ? Number(lwargv.split("=")[1]) : null) ?? Number(process.env.lwidth)) || 10;
         this.level_height = ((lhargv ? Number(lhargv.split("=")[1]) : null) ?? Number(process.env.lheight)) || 10;
         this.level_data = [];
@@ -105,6 +152,40 @@ class Host {
         this.secret;
         this.regenerateSecret();
         this.reloadPlugins();
+    }
+    /**
+     * serializes level data to a given buffer
+     * @param {Buffer} buf buffer to write serialized data to
+     * @param {number} off offset of write start
+     * @returns {number} amount of bytes written
+     */
+    serializeLevelData (buf, off) {
+        buf.writeInt32BE(gameVersion, off);
+        off += 4;
+        buf.writeInt32BE(this.level_width, off);
+        off += 4;
+        buf.writeInt32BE(this.level_height, off);
+        off += 4;
+        buf.writeInt32BE(1024, off);//TODO Make this actually mean something
+        off += 4;
+        for (var row in this.level_data) {
+            for (let cell in row) {
+                buf.writeUInt8(cell, off);
+                off++;
+            }
+        }
+        buf.writeBigInt64BE(BigInt(this.level_age), off);
+        off += 8;
+        buf.writeInt32BE(this.level_spawnx, off);
+        off += 4;
+        buf.writeInt32BE(this.level_spawny, off);
+        off += 4;
+        buf.writeInt32BE(this.entities.length, off);
+        off += 4;
+        this.entities.forEach(function (ent) {
+            off += ent.serialize(buf, off);
+        });
+        return off;
     }
     /**
      * reloads the server plugins
@@ -169,14 +250,18 @@ class Host {
      * checks if a player should be denied access even with valid auth eg: player was banned
      * @param {string} name name of player
      * @param {number[]} id player id
+     * @param {number} ver player version
      * @returns {[boolean, string]}
      */
-    checkPlayerDeny (name, id) {
+    checkPlayerDeny (name, id, ver) {
         for (const check of this.listeners.checkPlayerDeny) {
             const km = check.denyPlayerLogin(name, id);
             if (km[0]) {
                 return km;
             }
+        }
+        if (ver != gameVersion) {
+            return [true, "outdated client version"]
         }
         return [false, ""];
     }
@@ -197,9 +282,12 @@ class Host {
             socket.write(0x55);
             socket.end();
         } else {
-            socket.write([0x63, 0x00]);
-            await socket.read(1);
-            const km = this.checkPlayerDeny(name, authdata.slice(32, 40));
+            socket.write(0x63);
+            socket.write([(gameVersion >>> 24) & 0xff, (gameVersion >>> 16) & 0xff, (gameVersion >>> 8) & 0xff, gameVersion & 0xff]);
+            let treatAsVer = socket.read(4);
+            treatAsVer = (((((treatAsVer[0] << 8) ^ treatAsVer[1]) << 8) ^ treatAsVer[2]) << 8) ^ treatAsVer[3];
+            console.log(treatAsVer);
+            const km = this.checkPlayerDeny(name, authdata.slice(32, 40), treatAsVer);
             if (km[0] ?? false) {
                 const bufmsg = stringToBuffer(km[1] ?? "reason not provided");
                 socket.bundle();
@@ -215,6 +303,9 @@ class Host {
                 this.connected.splice(this.connected.findIndex(v => v.remoteAddress === remAddr), 1);
             });
             this.connected.push(socket);
+            const sData = Buffer.alloc(1024)//Maybe change this somehow
+            const numWritten = this.serializeLevelData(sData, 0);
+            socket.write(sData.subarray(0, numWritten));
         }
         // socket.write([nonce0, ...serverID]);
         return;
