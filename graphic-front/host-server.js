@@ -1,7 +1,7 @@
 const net = require("net");
 const { randomBytes, publicEncrypt, createPublicKey } = require("crypto");
 const dns_lookup = require("dns").lookup;
-const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp, SAddr } = require("./defs");
+const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp, SAddr, vConnect} = require("./defs");
 const { readFileSync, existsSync } = require("fs");
 const join_path = require("path").join;
 
@@ -141,7 +141,7 @@ class Host {
             bundle.setIndentCount(7);
             bundle.mkHeader("AUTH UPDATE PROTOCOL");
             bundle.onFinish("CONNECTION TERMINATED", true);
-            sock.on("error", () => {bundle.mkLog("connection error"); bundle.finish()});
+            sock.on("error", (theerror) => {bundle.mkLog(`connection error: ${theerror}`); bundle.finish()});
             sock.on("cClose", ()=>{bundle.finish()});
             sock.on("connect", async () => {
                 bundle.mkLog("connected to auth server");
