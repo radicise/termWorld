@@ -357,13 +357,10 @@ class Host {
         }
         this.animationBuffer.writeUInt8(0x02, this.bufOff);
         this.bufOff++;
-        console.log(this.animationBuffer);
-        console.log(this.bufOff);
         let subToSend = this.animationBuffer.subarray(0, this.bufOff);
         for (let p = 0; p < this.connected.length; p++) {
             this.connected[p].write(subToSend);
         }
-        console.log("wkjef");
         this.bufOff = 0;
     }
     /**
