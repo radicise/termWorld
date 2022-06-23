@@ -1,7 +1,7 @@
 const net = require("net");
 const { randomBytes, publicEncrypt, createPublicKey, randomInt } = require("crypto");
 const dns_lookup = require("dns").lookup;
-const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp, SAddr, vConnect } = require("./defs");
+const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp, SAddr, vConnect, reduceToHex } = require("./defs");
 const { readFileSync, existsSync } = require("fs");
 const join_path = require("path").join;
 const gameVersion = 2;//update upon update
@@ -76,17 +76,20 @@ let serverPassword = "password";
 class Entity {
     static invSizes = [0, 2, 15, 1, 0];
     /**
-     * @param {number} etype entityTypeID
+     * @param {number} type entityTypeID
      * @param {number} xPos initial x-coordinate
      * @param {number} yPos initial y-coordinate
      */
     constructor(type, xPos, yPos) {
-        this.etype = 0;
+        this.etype = type;
         this.x = xPos;
         this.y = yPos;
         this.termColor = 16;
+        if (this.etype > 0) {
+            this.termColor = randomInt(8, 16);
+        }
         this.health = 10
-        if (type == 1) {
+        if (this.etype == 1) {
             this.regenFrame = randomInt(0, 15);
         }
         this.inventory = new Array(Entity.invSizes[type] * 2);
@@ -114,21 +117,22 @@ class Entity {
             return off;
         }
         if ((this.etype == 1) || (this.etype == 2)) {
-            buf.writeInt32BE(Entity.invSizes[this.type]);
+            buf.writeUInt32BE(Entity.invSizes[this.etype], off);
+            off += 4;
             for (let i = 0; i < Entity.invSizes[this.etype]; i++) {
                 if (this.inventory[i * 2] == undefined) {
                     buf.writeUInt8(0, off);
                     off++;
                     continue;
                 }
-                buf.writeUInt8(this.inventory[i * 2], off);
-                off++;
                 if (this.inventory[(i * 2) + 1] == 0) {
                     buf.writeInt8(0xff, off);
                 }
                 else {
                     buf.writeInt8(this.inventory[(i * 2) + 1], off);
                 }
+                off++;
+                buf.writeUInt8(this.inventory[i * 2], off);
                 off++;
             }
         }
@@ -139,7 +143,12 @@ class Entity {
         if (this.etype == 3) {
             //TODO serialize item data
         }
-        buf.writeBigInt64BE(BigInt((this.termColor & 0xf) << 6), off);
+        if (this.etype == 2) {
+            buf.writeBigInt64BE(BigInt(((this.termColor & 0xf) << 6) ^ (this.regenFrame & 0xf)), off);
+        }
+        else {
+            buf.writeBigInt64BE(BigInt((this.termColor & 0xf) << 6), off);
+        }
         off += 8;
         buf.writeInt16BE(this.health, off);
         off += 2; 
@@ -208,6 +217,7 @@ class Host {
         this.reloadPlugins();
         /**@type {number} */
         this.bufOff = 0;
+        setInterval(this.animateFrame.bind(this), this.turn_interval);
     }
     /**
      * serializes level data to a given buffer
@@ -220,20 +230,16 @@ class Host {
         off += 4;
         buf.writeInt32BE(this.level_width, off);
         off += 4;
-        console.log(buf);
         buf.writeInt32BE(this.level_height, off);
         off += 4;
         buf.writeInt32BE(1024, off);//TODO Make this actually mean something
         off += 4;
-        console.log(buf);
         for (let i = 0; i < this.level_data.length; i++) {
-            console.log(i);
-            for (let j = 0; j < this.level_data[i].length; i++) {
-                buf.writeUint8(0, off);
+            for (let j = 0; j < this.level_data[i].length; j++) {
+                buf.writeUint8(this.level_data[i][j], off);
                 off++;
             }
         }
-        console.log(buf);
         buf.writeBigInt64BE(BigInt(this.level_age), off);
         off += 8;
         buf.writeInt32BE(this.level_spawnx, off);
@@ -242,12 +248,9 @@ class Host {
         off += 4;
         buf.writeInt32BE(this.entities.length, off);
         off += 4;
-        console.log(buf);
         this.entities.forEach(function (ent) {
             off = ent.serialize(buf, off);
         });
-        console.log(buf);
-        console.log(off);
         return off;
     }
     /**
@@ -332,29 +335,36 @@ class Host {
      * decides all entity spawn positions
      * @param {number} x desired x-coordinate
      * @param {number} y desired y-coordinate
-     * @returns {[number, number]} decided spawn coordinates in [x, y] format
+     * @returns {[number, number]|null} decided spawn coordinates in [x, y] format, or null, if the spawn is denied
      */
     resolveSpawning (x, y) {
         for (const res of this.listeners.spawnObstructionResolver) {
             return res(x, y)
         }
-        logger.mkLog("No plugin could handle entity spawn point resolution! Returning the requested coordinates...");
-        return [x, y];
+        for (let en in this.entities) {
+            if ((en.x == x) && (en.y == y)) {
+                return null;
+            }
+        }
+        return ([x, y]);
     }
     /**
      * performs one animation frame and then sends the level update data to clients along with the 0x02 byte for rendering the frame client-side
      */
     animateFrame() {
         for (let hee = 0; hee < this.entities.length; hee++) {
-            this.bufOff += (this.entities[hee]).animate(this.animationBuffer, this.bufOff);
+            this.bufOff = (this.entities[hee]).animate(this.animationBuffer, this.bufOff);
         }
-        this.animationBuffer.writeUInt8(0x02);
+        this.animationBuffer.writeUInt8(0x02, this.bufOff);
         this.bufOff++;
-        let subToSend = this.animationBuffer.subarray(0, this.buffOff);
+        console.log(this.animationBuffer);
+        console.log(this.bufOff);
+        let subToSend = this.animationBuffer.subarray(0, this.bufOff);
         for (let p = 0; p < this.connected.length; p++) {
             this.connected[p].write(subToSend);
         }
-        this.BuffOff = 0;
+        console.log("wkjef");
+        this.bufOff = 0;
     }
     /**
      * @param {NSocket} socket
@@ -389,6 +399,16 @@ class Host {
                 socket.flush();
                 return socket.end();
             }
+            const spawnPlace = this.resolveSpawning(this.level_spawnx, this.level_spawny);
+            if (spawnPlace == null) {
+                const bufmsg = stringToBuffer("spawn desired at the spawn point was denied");
+                socket.bundle();
+                socket.write(0x55);
+                socket.write(bigToBytes(bufmsg.length, 4));
+                socket.write(bufmsg);
+                socket.flush();
+                return socket.end();
+            }
             socket.write(0x63);
             const remAddr = socket.remoteAddress;
             socket.on("cClose", () => {
@@ -398,15 +418,12 @@ class Host {
             const numWritten = this.serializeLevelData(sData, 0);
             socket.write(sData.subarray(0, numWritten));
             socket.write([(this.turn_interval >>> 8) & 0xff, this.turn_interval & 0xff]);
-            const spawnPlace = this.resolveSpawning(this.level_spawnx, this.level_spawny);
             const initialForm = new Entity(2, spawnPlace[0], spawnPlace[1]);
+            socket.write([(initialForm.x >>> 24) & 0xff, (initialForm.x >>> 16) & 0xff, (initialForm.x >>> 8) & 0xff, initialForm.x & 0xff, (initialForm.y >>> 24) & 0xff, (initialForm.y >>> 16) & 0xff, (initialForm.y >>> 8) & 0xff, initialForm.y & 0xff]);
             this.connected.push(socket);
-            (this.entities[this.entities.push(initialForm) - 1]).serialize(this.animationBuffer, this.bufOff);
-            console.log(sData);
-            console.log(numWritten);
-            await socket.write([(initialForm.x >>> 24) & 0xff, (initialForm.x >>> 16) & 0xff, (initialForm.x >>> 8) & 0xff, initialForm.x & 0xff, (initialForm.y >>> 24) & 0xff, (initialForm.y >>> 16) & 0xff, (initialForm.y >>> 8) & 0xff, initialForm.y & 0xff])
-            console.log("jnewnjef")
-            this.animateFrame();
+            this.animationBuffer.writeUInt8(0x06, this.bufOff);
+            this.bufOff++;
+            this.bufOff = (this.entities[this.entities.push(initialForm) - 1]).serialize(this.animationBuffer, this.bufOff);
         }
         // socket.write([nonce0, ...serverID]);
         return;

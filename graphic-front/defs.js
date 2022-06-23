@@ -184,7 +184,7 @@ class NSocket extends Socket {
         this._owrite(data);
     }
     /**
-     * writes data to the socket
+     * writes data to the socket``
      * 
      * note that when the internal cryptor is set the ```strIsUtf8``` parameter becomes applicable
      * @param {string | number | Buffer | number[]} data data to write
@@ -193,6 +193,11 @@ class NSocket extends Socket {
      */
     write (data, strIsUtf8) {
         if (this.ending) return;
+        if (this.do_flush) {
+            let thep = new Promise((res, _) => {
+                this.once("drain", res);//TODO excuse me if this is a dumb question / there is no problem, but what if the event triggers before the listener is started?
+            });
+        }
         if (this.cryptor !== null && this.cryptor !== undefined && this.use_cryptor) {
             data = this.cryptor.crypt(data, strIsUtf8);
         }
@@ -203,9 +208,10 @@ class NSocket extends Socket {
         } else {
             this._wwrite(Uint8Array.from(data));
         }
-        return new Promise((res, _) => {
-            this.once("drain", res);//TODO excuse me if this is a dumb question / there is no problem, but what if the event triggers before the listener is started?
-        });
+        if ((typeof thep) === "undefined") {
+            return;
+        }
+        return thep;
     }
     //{{default?:number|number[]|Buffer,format?:"number"|"array"|"buffer"|"string",encoding?:"utf-8"|"utf8"|"utf-16"|"utf16"}}
     /**
