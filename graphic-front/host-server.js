@@ -47,7 +47,28 @@ const port = 15651;
 const serverID = Array.from(Buffer.alloc(8, 0));
 let serverPassword = "password";
 
-
+/**
+ * @param {Buffer} buf the buffer to write the data to
+ * @param {number} off the offset at which to start writing the data
+ * @param {number} x the old x-coordinate
+ * @param {number} y the old y-coordinate
+ * @param {number} xp the new x-coordinate
+ * @param {number} yp the new y-coordinate
+ * @returns {number} the new buffer offset
+ */
+function addMoveData (buf, off, x, y, xp, yp) {
+    buf.writeUInt8(0x04, off);
+    off++;
+    buf.writeInt32BE(x, off);
+    off += 4;
+    buf.writeInt32BE(y, off);
+    off += 4;
+    buf.writeInt32BE(xp, off);
+    off += 4;
+    buf.writeInt32BE(yp, off);
+    off += 4;
+    return off;
+}
 /**
  * @typedef ServerPlugin
  * @type {object}
@@ -66,8 +87,6 @@ let serverPassword = "password";
  * @typedef Entity
  * @type {object}
  * @property {number} etype entity type
- * @property {number} x x-coordinate
- * @property {number} y y-coordinate
  * @property {number} termColor terminal ansi-style color code, 16 if no specific color for this entity
  * @property {number} health amount of health
  * @property {number[]} inventory inventory, inventory[<even number n>] contains the item ID for the slot <n / 2> while inventory[<n + 1>] contains the corresponding item amount, not surpassing 127. In entity-items, this only holds the item held by the entity-item.
@@ -77,13 +96,9 @@ class Entity {
     static invSizes = [0, 2, 15, 1, 0];
     /**
      * @param {number} type entityTypeID
-     * @param {number} xPos initial x-coordinate
-     * @param {number} yPos initial y-coordinate
      */
-    constructor(type, xPos, yPos) {
+    constructor(type) {
         this.etype = type;
-        this.x = xPos;
-        this.y = yPos;
         this.termColor = 16;
         if (this.etype > 0) {
             this.termColor = randomInt(8, 16);
@@ -95,22 +110,14 @@ class Entity {
         this.inventory = new Array(Entity.invSizes[type] * 2);
     }
     /**
-     * animates the specified entity and sends update information to the provided buffer, starting at the specified offset
-     * @param {Buffer} buf buffer to write update information to
-     * @param {number} off offset in buffer to start writing at
-     * @returns {number} the buffer offset after writing
-     */
-    animate(buf, off) {
-        //TODO implement
-        return off;
-    }
-    /**
      * serializes level data to a given buffer
      * @param {Buffer} buf buffer to write serialized data to
      * @param {number} off offset in buffer
+     * @param {number} x entity's x-coordinate
+     * @param {number} y entity's y-coordinate
      * @returns {number} the buffer offset after writing
      */
-    serialize (buf, off) {
+    serialize (buf, off, x, y) {
         buf.writeUInt8(this.etype, off);
         off++;
         if (this.etype == 4) {
@@ -136,9 +143,9 @@ class Entity {
                 off++;
             }
         }
-        buf.writeUInt32BE(this.x, off);
+        buf.writeUInt32BE(x, off);
         off += 4;
-        buf.writeUInt32BE(this.y, off);
+        buf.writeUInt32BE(y, off);
         off += 4;
         if (this.etype == 3) {
             //TODO serialize item data
@@ -164,8 +171,8 @@ class Host {
         this.max_players = ((mpargv ? Number(mpargv.split("=")[1]) : null) ?? Number(process.env.maxplay)) || 10;
         /**@type {NSocket[]} */
         this.connected = [];
-        /**@type {Entity[]} */
-        this.entities = [new Entity(1, 2, 3)];
+        /**@type {Map<number, Entity} */
+        this.entities = new Map();
         this.level_age = 0;
         const lsxargv = argv.find(v => v.startsWith("--lspawnx="));
         const lsyargv = argv.find(v => v.startsWith("--lspawny="));
@@ -177,9 +184,7 @@ class Host {
         this.level_height = ((lhargv ? Number(lhargv.split("=")[1]) : null) ?? Number(process.env.lheight)) || 10;
         this.level_data = [];
         /**@type {ServerPlugin[]} */
-        this.plugins = [{"service_register" : 2, "spawnObstructionResolver" : ((x, y) => {
-            return [x, y];//TODO actually implement this
-        })}];
+        this.plugins = [];
         this.listeners = {
             /**@type {ServerPlugin[]} */
             checkPlayerDeny : [],
@@ -217,6 +222,7 @@ class Host {
         this.reloadPlugins();
         /**@type {number} */
         this.bufOff = 0;
+        this.entities.set((3 * this.level_width) + 2, new Entity(1));
         setInterval(this.animateFrame.bind(this), this.turn_interval);
     }
     /**
@@ -246,11 +252,12 @@ class Host {
         off += 4;
         buf.writeInt32BE(this.level_spawny, off);
         off += 4;
-        buf.writeInt32BE(this.entities.length, off);
+        buf.writeInt32BE(this.entities.size, off);
         off += 4;
-        this.entities.forEach(function (ent) {
-            off = ent.serialize(buf, off);
-        });
+        this.entities.forEach(function (pos, ent) {
+            let h = this.sptv(ent);
+            off = pos.serialize(buf, off, h[0], h[1]);
+        }, this);
         return off;
     }
     /**
@@ -341,27 +348,92 @@ class Host {
         for (const res of this.listeners.spawnObstructionResolver) {
             return res(x, y)
         }
-        for (let en in this.entities) {
-            if ((en.x == x) && (en.y == y)) {
-                return null;
-            }
+        if ((typeof (this.entities.get(this.vpts(x, y)))) == undefined) {
+            return null;
         }
         return ([x, y]);
     }
     /**
+     * attempts to move the entity at one coordinate posititon by a given vector
+     * 
+     * @param {number} curX entity's current x-coordinate
+     * @param {number} curY entity's current y-coordinate
+     * @param {number} byX movement by X
+     * @param {number} byY momvement by Y
+     * @param {number} depth recursion depth
+     * @returns {boolean} if the entity was moved by the specified vector by this call of the function
+     */
+    moveEntBy(oldX, oldY, byX, byY, depth) {
+        if (depth > 15) {
+            return false;
+        };
+        
+        if (oldX + byX < 0) {
+            byX = -oldX;
+        }
+        if (oldX + byX >= this.level_width) {
+            byX = (this.level_width - oldX) - 1;
+        }
+        if (oldY + byY < 0) {
+            byY = -oldY;
+        }
+        if (oldY + byY >= this.level_height) {
+            byY = (this.level_height - oldY) - 1;
+        }
+        
+        //TODO damage if depth is more than 0
+        
+        let sc = this.vpts(oldX + byX, oldY + byY);
+        if ((typeof (this.entities.get(sc))) == 'undefined') {
+            let po = this.vpts(oldX, oldY);
+            let thg = this.entities.get(po);
+            this.entities.delete(po);
+            this.entities.set(sc, thg);
+            this.bufOff = addMoveData(this.animationBuffer, this.bufOff, oldX, oldY, oldX + byX, oldY + byY);
+            return true;
+        }
+        
+        //TODO implement pushing other entities and item pickup
+        
+        return false;
+    }
+    /** 
+     * @param {number} x x-coordinate
+     * @param {number} y y-coordinate
+     * @returns {number} scalar representation of the passed coordinates
+    */
+    vpts(x, y) {
+        return ((y * this.level_width) + x);
+    }
+    /** 
+     * @param {number} s scalar representation of the coordinates
+     * @returns {[number, number]} vector representation of the passed scalar-represented coordinates
+    */
+    sptv(s) {
+        return ([s % this.level_width, Math.floor(s / this.level_width)]);
+    }
+    /**
      * performs one animation frame and then sends the level update data to clients along with the 0x02 byte for rendering the frame client-side
+     * @returns {number} amount of bytes written to each client from the animation buffer as part of the animation
      */
     animateFrame() {
-        for (let hee = 0; hee < this.entities.length; hee++) {
-            this.bufOff = (this.entities[hee]).animate(this.animationBuffer, this.bufOff);
-        }
+        this.entities.forEach(function (treb, hee) {
+            switch (treb.etype) {
+                case (1):
+                    let scpo = this.sptv(hee);
+                    this.moveEntBy(scpo[0], scpo[1], randomInt((-1), 2), randomInt((-1), 2), 0);
+                    break;
+            }
+        }, this);
         this.animationBuffer.writeUInt8(0x02, this.bufOff);
         this.bufOff++;
         let subToSend = this.animationBuffer.subarray(0, this.bufOff);
         for (let p = 0; p < this.connected.length; p++) {
             this.connected[p].write(subToSend);
         }
+        let h = this.bufOff;
         this.bufOff = 0;
+        return h;
     }
     /**
      * @param {NSocket} socket
@@ -411,18 +483,18 @@ class Host {
             socket.on("cClose", () => {
                 this.connected.splice(this.connected.findIndex(v => v.remoteAddress === remAddr), 1);
             });
-            const sData = Buffer.alloc(1024)//Maybe change this somehow
+            const sData = Buffer.alloc(1024)//TODO probably change this somehow
             const numWritten = this.serializeLevelData(sData, 0);
             socket.write(sData.subarray(0, numWritten));
             socket.write([(this.turn_interval >>> 8) & 0xff, this.turn_interval & 0xff]);
-            const initialForm = new Entity(2, spawnPlace[0], spawnPlace[1]);
-            socket.write([(initialForm.x >>> 24) & 0xff, (initialForm.x >>> 16) & 0xff, (initialForm.x >>> 8) & 0xff, initialForm.x & 0xff, (initialForm.y >>> 24) & 0xff, (initialForm.y >>> 16) & 0xff, (initialForm.y >>> 8) & 0xff, initialForm.y & 0xff]);
+            const initialForm = new Entity(2);
+            socket.write([(spawnPlace[0] >>> 24) & 0xff, (spawnPlace[0] >>> 16) & 0xff, (spawnPlace[0] >>> 8) & 0xff, spawnPlace[0] & 0xff, (spawnPlace[1] >>> 24) & 0xff, (spawnPlace[1] >>> 16) & 0xff, (spawnPlace[1] >>> 8) & 0xff, spawnPlace[1] & 0xff]);
             this.connected.push(socket);
             this.animationBuffer.writeUInt8(0x06, this.bufOff);
             this.bufOff++;
-            this.bufOff = (this.entities[this.entities.push(initialForm) - 1]).serialize(this.animationBuffer, this.bufOff);
+            this.bufOff = initialForm.serialize(this.animationBuffer, this.bufOff, spawnPlace[0], spawnPlace[1]);
+            this.entities.set(this.vpts(spawnPlace[0], spawnPlace[1]), initialForm);
         }
-        // socket.write([nonce0, ...serverID]);
         return;
     }
     /**
