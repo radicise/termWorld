@@ -75,7 +75,7 @@ let server_policies = [
         name : "require-unique-names",
         type : "bool",
         id : 0,
-        val : false,
+        value : false,
     }
 ];
 
@@ -176,6 +176,51 @@ class Auth {
                     socket.end();
                     breakout = true;
                     break;
+                case 0x01:
+                    const pid = await socket.read(1, {format:"number"});
+                    const ind = server_policies.findIndex(v => v.id === pid);
+                    if (ind === -1) {
+                        socket.write(0x55);
+                        break;
+                    }
+                    socket.write(0x63);
+                    if (await socket.read(1, {format:"number"}) === 0x01) {
+                        const type = server_policies[ind].type;
+                        const tid = type === "bool" ? 0x01 : (type === "number" ? 0x02 : (type === "string" ? 0x03 : 0x04));
+                        const val = server_policies[ind].value;
+                        socket.bundle();
+                        socket.write(tid);
+                        if (tid === 1) {
+                            socket.write(val ? 0x02 : 0x01);
+                        } else if (tid === 2) {
+                            socket.write(bigToBytes(val, 4));
+                        } else if (tid === 3) {
+                            socket.write(bigToBytes(val.length, 4));
+                            socket.write(val);
+                        }
+                        socket.flush();
+                    } else {
+                        let value;
+                        switch (server_policies[ind].type) {
+                            case "bool":
+                                value = (await socket.read(1, {format:"number"}) === 0x02);
+                                break;
+                            case "number":
+                                value = bytesToBig(await socket.read(4));
+                                break;
+                            case "string":
+                                value = bufferToString(await socket.read(bytesToBig(await socket.read(4))));
+                                break;
+                        }
+                        if (value !== undefined) {
+                            server_policies[ind].value = value;
+                            socket.write(0x63);
+                        } else {
+                            socket.write(0x55);
+                        }
+                        console.log(server_policies[ind]);
+                    }
+                    break;
                 case 0x02:
                     buf = cipher.crypt(await socket.read(72));
                     const usrname = Buffer.from(buf.slice(0, 32)).toString("utf-8");
@@ -201,6 +246,7 @@ class Auth {
                         const expkey = stringToBuffer(key);
                         socket.write(bigToBytes(expkey.length, 4));
                         socket.write(expkey);
+                        console.log(pol, val);
                         if (pol.type === "bool") {
                             socket.write(0x01);
                             socket.write(val ? 0x02 : 0x01);

@@ -117,5 +117,6 @@ input {
 }
 
 .policy-list > div > span:last-child {
+    cursor : pointer;
     text-align : end;
 }

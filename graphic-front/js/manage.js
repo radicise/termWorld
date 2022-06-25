@@ -145,20 +145,68 @@ async function manage_op (opid) {
 }
 
 /**
+ * @param {HTMLSpanElement} elem
+ * @param {{id:number,name:string,type:string,value:any}} policy
+ */
+async function manClick (elem, policy) {
+    const socket = manConnection;
+    socket.write([0x01, policy.id]);
+    if (await socket.read(1, {format:"number"}) === 0x55) return;
+    socket.bundle();
+    socket.write(0x02);
+    if (policy.type === "boolean") {
+        socket.write(elem.textContent === "true" ? 0x02 : 0x01);
+    } else if (policy.type === "number") {
+        socket.write(bigToBytes(Number(elem.value), 4));
+    } else if (policy.type === "string") {
+        const exp = stringToBuffer(elem.value);
+        socket.write(bigToBytes(exp.length, 4));
+        socket.write(exp);
+    }
+    socket.flush();
+}
+
+/**
  * @param {HTMLDivElement} elem
  * @param {{id:number,name:string,type:string,value:any}[]} policies
  */
 function mkPolicyList (elem, policies) {
     elem.replaceChildren();
     for (const policy of policies) {
+        console.log(policy);
         const cont = document.createElement("div");
         const dat = document.createElement("span");
         const id = document.createElement("span");
-        const val = document.createElement("span");
+        let val;
         id.textContent = `${policy.id} - ${policy.type}`;
         dat.textContent = policy.name;
-        val.textContent = `${policy.value}`;
         cont.replaceChildren(id, dat, val);
+        if (policy.type === "boolean") {
+            val = document.createElement("span");
+            val.addEventListener("click", () => {
+                val.textContent = val.textContent === "false" ? "true" : "false";
+                manClick(val, policy);
+            });
+            val.textContent = `${policy.value}`;
+        } else if (policy.type === "number") {
+            val = document.createElement("input");
+            val.type = "number";
+            const f = () => {
+                manClick(val, policy);
+            }
+            val.addEventListener("blur", f);
+            val.addEventListener("change", f);
+            val.value = policy.value;
+        } else if (policy.type === "string") {
+            val = document.createElement("input");
+            val.type = "text";
+            const f = () => {
+                manClick(val, policy);
+            }
+            val.addEventListener("blur", f);
+            val.addEventListener("change", f);
+            val.value = policy.value;
+        }
         elem.appendChild(cont);
     }
 }
