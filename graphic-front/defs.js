@@ -110,6 +110,8 @@ class NSocket extends Socket {
         this.do_flush = true;
         /**@type {Buffer[]} @private */
         this.bundled = [];
+        /**@type {number} @public */
+        this.refid = 0;
         const that = this;
         function rebind () {
             that.write = NSocket.prototype.write;
