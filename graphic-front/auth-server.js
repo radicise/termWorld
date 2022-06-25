@@ -178,7 +178,7 @@ const server = net.createServer(
                         socket.end();
                         breakout = true;
                         break;
-                    case 0x01:
+                    case 0x02:
                         buf = cipher.crypt(await socket.read(72));
                         const usrname = Buffer.from(buf.slice(0, 32)).toString("utf-8");
                         const usrid = buf.slice(32, 40);
