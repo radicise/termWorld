@@ -1,13 +1,16 @@
+require("dotenv").config();
 const net = require("net");
-const { randomBytes, publicEncrypt, createPublicKey } = require("crypto");
+const { randomBytes, publicEncrypt, createPublicKey, privateDecrypt } = require("crypto");
 const dns_lookup = require("dns").lookup;
-const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp, SAddr } = require("./defs");
+const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp, SAddr, vConnect, SymmetricCipher, generateKeyPair, bytesToBig } = require("./defs");
 const { readFileSync, existsSync } = require("fs");
 const join_path = require("path").join;
 
 const plugin_reg_path = join_path(__dirname, "data", "server", "plugins.json");
 
 mkTmp(["data", "server", "plugins.json"], "{}");
+
+let [ publicKey, privateKey ] = generateKeyPair();
 
 const argv = process.argv;
 
@@ -58,9 +61,25 @@ let serverPassword = "password";
  * 0 - denyPlayerLogin
  * 
  * 1 - spawnObstructionResolver
- * @property {(name:string,id:number[]) => [boolean, string]} [denyPlayerLogin] checks if a player login should be denied
+ * @property {(name:string,id:number[],policies:object,counts:object) => [boolean, string]} [denyPlayerLogin] checks if a player login should be denied
  * @property {() => boolean} [spawnObstructionResolver] attempts to resolve player spawn obstruction. returns true on success and false otherwise NOT FULLY DEFINED YET
  */
+
+/**@type {{name:string,type:"bool"|"number"|"string",id:number,value:boolean|number|string}[]} */
+let server_policies = [
+    {
+        name : "allow-no-authentication-servers",
+        type : "bool",
+        id : 0,
+        value : false,
+    },
+    {
+        name : "max-player-count",
+        type : "number",
+        id : 1,
+        value : 10,
+    }
+];
 
 
 class Host {
@@ -131,39 +150,49 @@ class Host {
     }
     /**
      * @private
+     * @returns {Promise<[number, number]>}
      */
     regenerateSecret () {
-        this.secret = randomBytes(32);
-        for (const addr of this.maintain_auths) {
-            const sock = new NSocket();
-            const bundle = logger.createLogBundle();
-            bundle.setHeaderDashCount(5, 2);
-            bundle.setIndentCount(7);
-            bundle.mkHeader("AUTH UPDATE PROTOCOL");
-            bundle.onFinish("CONNECTION TERMINATED", true);
-            sock.on("error", () => {bundle.mkLog("connection error"); bundle.finish()});
-            sock.on("cClose", ()=>{bundle.finish()});
-            sock.on("connect", async () => {
-                bundle.mkLog("connected to auth server");
-                sock.write([0x33, ...serverID]);
-                if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: auth server did not recognize server ID"); return sock.end();}
-                const nonce0 = await sock.read(32);
-                sock.write(hash(Buffer.concat([Buffer.from(hash(Buffer.concat([stringToBuffer(serverPassword), Buffer.from(serverID)]))), Buffer.from(nonce0)])));
-                if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: invalid server password"); return sock.end();}
-                let buf = await sock.read(2);
-                buf = await sock.read((buf[0] << 8) | buf[1]);
-                const ret = publicEncrypt(createPublicKey(Buffer.from(buf).toString("utf-8")), this.secret);
-                sock.write([(ret.length & 0xff00) >> 8, ret.length & 0xff]);
-                sock.write(ret);
-                if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: unknown reason"); return sock.end();}
-                bundle.mkLog("successfully updated server secret");
-                sock.end();
-            });
-            vConnect(addr, sock, (ret, hadErr) => {
-                bundle.mkLog(ret);
-                if (hadErr) bundle.finish();
-            });
-        }
+        const that = this;
+        return new Promise(async (res, _) => {
+            let good = 0;
+            let fail = 0;
+            that.secret = randomBytes(32);
+            for (const addr of that.maintain_auths) {
+                const sock = new NSocket();
+                const bundle = logger.createLogBundle();
+                bundle.setHeaderDashCount(5, 2);
+                bundle.setIndentCount(7);
+                bundle.mkHeader("AUTH UPDATE PROTOCOL");
+                bundle.onFinish("CONNECTION TERMINATED", true);
+                sock.on("error", () => {bundle.mkLog("connection error"); bundle.finish()});
+                sock.on("cClose", ()=>{bundle.finish()});
+                await new Promise((res, _) => {
+                    sock.on("connect", async () => {
+                        bundle.mkLog("connected to auth server");
+                        sock.write([0x33, ...serverID]);
+                        if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: auth server did not recognize server ID"); fail++; return res(sock.end());}
+                        const nonce0 = await sock.read(32);
+                        sock.write(hash(Buffer.concat([Buffer.from(hash(Buffer.concat([stringToBuffer(serverPassword), Buffer.from(serverID)]))), Buffer.from(nonce0)])));
+                        if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: invalid server password"); fail++; return res(sock.end());}
+                        let buf = await sock.read(2);
+                        buf = await sock.read((buf[0] << 8) | buf[1]);
+                        const ret = publicEncrypt(createPublicKey(Buffer.from(buf).toString("utf-8")), that.secret);
+                        sock.write([(ret.length & 0xff00) >> 8, ret.length & 0xff]);
+                        sock.write(ret);
+                        if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: unknown reason"); fail ++; return res(sock.end());}
+                        good ++;
+                        bundle.mkLog("successfully updated server secret");
+                        res(sock.end());
+                    });
+                    vConnect(addr, sock, (ret, hadErr) => {
+                        bundle.mkLog(ret);
+                        if (hadErr) {fail ++; res(bundle.finish()); }
+                    });
+                });
+            }
+            return res([good, fail]);
+        });
     }
     /**
      * checks if a player should be denied access even with valid auth eg: player was banned
@@ -173,7 +202,7 @@ class Host {
      */
     checkPlayerDeny (name, id) {
         for (const check of this.listeners.checkPlayerDeny) {
-            const km = check.denyPlayerLogin(name, id);
+            const km = check.denyPlayerLogin(name, id, server_policies, {players:this.connected.length});
             if (km[0]) {
                 return km;
             }
@@ -223,7 +252,108 @@ class Host {
      * @param {NSocket} socket
      */
     async socketManagementLoop (socket) {
-        //
+        const exp = publicKey.export({format:"pem",type:"spki"});
+        socket.bundle();
+        socket.write(bigToBytes(exp.length, 2));
+        socket.write(stringToBuffer(exp, true));
+        socket.flush();
+        const password = bufferToString(privateDecrypt(privateKey, await socket.read(bytesToBig(await socket.read(2)), {format:"buffer"})));
+        if (password !== process.env.HOST_ADMIN) {
+            socket.write(0x55);
+            return socket.end();
+        }
+        socket.write(0x63);
+        const clientpubkey = createPublicKey(await socket.read(bytesToBig(await socket.read(2)), {format:"buffer"}));
+        const symkey = randomBytes(32);
+        const enckey = publicEncrypt(clientpubkey, symkey);
+        socket.bundle();
+        socket.write(bigToBytes(enckey.length, 2));
+        socket.write(enckey);
+        socket.flush();
+        const cipher = new SymmetricCipher(symkey);
+        socket.setCryptor(cipher);
+        while (true) {
+            const opid = await socket.read(1, {format:"number"});
+            // terminate connection
+            if (opid === 0x00) {
+                return socket.end();
+            }
+            // set / get policies
+            if (opid === 0x01) {
+                const pid = await socket.read(1, {format:"number"});
+                const ind = server_policies.findIndex(v => v.id === pid);
+                if (ind === -1) {
+                    socket.write(0x55);
+                    continue;
+                }
+                socket.write(0x63);
+                if (await socket.read(1, {format:"number"}) === 0x01) {
+                    const type = server_policies[ind].type;
+                    const tid = type === "bool" ? 0x01 : (type === "number" ? 0x02 : (type === "string" ? 0x03 : 0x04));
+                    const val = server_policies[ind].value;
+                    socket.bundle();
+                    socket.write(tid);
+                    if (tid === 1) {
+                        socket.write(val ? 0x02 : 0x01);
+                    } else if (tid === 2) {
+                        socket.write(bigToBytes(val, 4));
+                    } else if (tid === 3) {
+                        socket.write(bigToBytes(val.length, 4));
+                        socket.write(val);
+                    }
+                    socket.flush();
+                } else {
+                    let value;
+                    switch (server_policies[ind].type) {
+                        case "bool":
+                            value = (await socket.read(1, {format:"number"}) === 0x02);
+                            break;
+                        case "number":
+                            value = bytesToBig(await socket.read(4));
+                            break;
+                        case "string":
+                            value = bufferToString(await socket.read(bytesToBig(await socket.read(4))));
+                            break;
+                    }
+                    if (value !== undefined) {
+                        server_policies[ind].value = value;
+                        socket.write(0x63);
+                    } else {
+                        socket.write(0x55);
+                    }
+                }
+            }
+            // regen secret key
+            if (opid === 0x02) {
+                const data = await this.regenerateSecret();
+                socket.write([data[0] & 0xff, data[1] & 0xff]);
+            } else if (opid === 0x03) {
+                socket.bundle();
+                socket.write(bigToBytes(Object.keys(server_policies).length, 2));
+                for (const key in server_policies) {
+                    const val = server_policies[key];
+                    socket.write(val.id);
+                    const expkey = stringToBuffer(key);
+                    socket.write(bigToBytes(expkey.length, 4));
+                    socket.write(expkey);
+                    if (val.type === "bool") {
+                        socket.write(0x01);
+                        socket.write(val.value ? 0x02 : 0x01);
+                    } else if (val.type === "number") {
+                        socket.write(0x02);
+                        socket.write(bigToBytes(val.value, 4));
+                    } else if (val.type === "string") {
+                        socket.write(0x03);
+                        const v2 = stringToBuffer(val.value);
+                        socket.write(bigToBytes(v2.length, 4));
+                        socket.write(v2);
+                    } else {
+                        socket.write(0x04);
+                    }
+                }
+                socket.flush();
+            }
+        }
     }
     /**
      * @param {NSocket} socket

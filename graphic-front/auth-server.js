@@ -1,22 +1,17 @@
 require("dotenv").config();
 const net = require("net");
 const { randomBytes, publicEncrypt, privateDecrypt, createPublicKey } = require("crypto");
-const { NSocket, stringToBuffer, charsToBuffer, reduceToHex, asHex, generateKeyPair, SymmetricCipher, hash, Logger, formatBuf } = require("./defs");
-// const { read } = require("./block-read");
-// const { stringToBuffer, charsToBuffer, reduceToHex, asHex } = require("./string-to-buf");
-// const { generateKeyPair, symmetricEncrypt, symmetricDecrypt } = require("./keygen");
-// const { SymmetricCipher } = require("./encryption");
-// const { hash } = require("./hash");
-// const { Logger, formatBuf } = require("./logging");
-// const { NSocket } = require("./socket");
+const { NSocket, stringToBuffer, charsToBuffer, reduceToHex, asHex, generateKeyPair, SymmetricCipher, hash, Logger, formatBuf, bigToBytes, bufferToString, bytesToBig } = require("./defs");
 
 const argv = process.argv;
+
+const port = Number(argv[2]) || 15652;
 
 const logger = new Logger("logs", "auth-log.log");
 
 if (argv.includes("--clear-log")) logger.clearLogFile();
 
-logger.mkLog("INSTANCE START", true);
+logger.mkLog(`INSTANCE START ON PORT: ${port}`, true);
 
 let no_exit = false;
 
@@ -34,6 +29,7 @@ process.on("SIGUSR2", onexit);
 process.on("uncaughtException", (l)=>{logger.no_logging=false;logger.mkLog(`UNHANDLED EXCEPTION: ${l}`, true);console.log(l?.stack);onexit()});
 
 const unsafe_logs = argv.includes("--unsafe-log");
+const decryption_debugging = argv.includes("--debug-encryption");
 if (unsafe_logs) logger.mkLog("UNSAFE LOGGING ENABLED");
 logger.no_logging = argv.includes("--no-log");
 
@@ -72,6 +68,14 @@ setInterval(() => {
         }
     }
 }, 1000);
+
+let server_policies = {
+    "require-unique-names" : {
+        type : "bool",
+        id : 0,
+        val : false,
+    }
+};
 
 const server = net.createServer(
     /**
@@ -134,38 +138,38 @@ const server = net.createServer(
             const b = Buffer.from(hash(Buffer.concat([Buffer.from(h), Buffer.from(nonce0), serverIdDb[targetSID][1], charsToBuffer(uID)])));
             logger.mkLog(`${usingID} was authenticated` + (unsafe_logs ? ` computed hash = ${logger.formatBuf(b)}` : ""));
             socket.write(b);
-        } else if (buf === 0x32) {
+        } else if (buf === 0x01) {
+            logger.mkLog(`${usingID} has id'd as config connection`);
             const exp = stringToBuffer(publicKey.export({type:"spki",format:"pem"}), true);
             socket.write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
             socket.write(exp);
-            buf = await socket.read(4);
-            const buf2 = await socket.read(buf[0] << 8 | buf[1]);
-            console.log(buf2);
-            const password = privateDecrypt(privateKey, Buffer.from(buf2)).toString("utf-8");
-            buf = await socket.read(buf[2] << 8 | buf[3]);
+            buf = await socket.read(bytesToBig(await socket.read(2)));
+            const password = bufferToString(privateDecrypt(privateKey, Buffer.from(buf)), "utf-16");
             if (password !== process.env.AUTH_ADMIN) {
+                logger.mkLog(`${usingID} failed to confirm auth as config`);
                 socket.write(0x55);
                 socket.end();
                 return;
             }
+            logger.mkLog(`${usingID} has been authenticated as config connection`);
             socket.write(0x00);
-            const clientPub = createPublicKey(Buffer.from(buf));
-            const symmetricKey = randomBytes(32);
-            const encrypted = publicEncrypt(clientPub, symmetricKey);
-            socket.write([(encrypted.length & 0xff00) >> 8, encrypted.length & 0xff]);
-            socket.write(encrypted);
-            const cipher = new SymmetricCipher(symmetricKey);
-            /**
-             * @param {number[] | number | Buffer} data
-             */
-            function enwrite (data) {
-                data = Buffer.isBuffer(data) ? data : Buffer.from(Array.isArray(data) ? data : [data]);
-                socket.write(cipher.crypt(data));
-                // socket.write(symmetricEncrypt(symmetricKey, data));
+            const clientPub = createPublicKey(await socket.read(bytesToBig(await socket.read(2)), {format:"buffer"}));
+            let symmetricKey;
+            if (decryption_debugging) {
+                symmetricKey = Buffer.of(0x73, 0x36, 0xf6, 0x1a, 0xe0, 0x2d, 0xac, 0x22, 0x3f, 0x87, 0x38, 0x0e, 0x87, 0x28, 0x3f, 0xdf, 0x1b, 0xbd, 0xfd, 0xca, 0x1f, 0x85, 0xbb, 0x7a, 0x92, 0x6b, 0x8e, 0x56, 0x4b, 0x65, 0x86, 0x9f);
+            } else {
+                symmetricKey = randomBytes(32);
             }
+            const encrypted = publicEncrypt(clientPub, symmetricKey);
+            socket.bundle();
+            socket.write(bigToBytes(encrypted.length, 2));
+            socket.write(encrypted);
+            socket.flush();
+            const cipher = new SymmetricCipher(symmetricKey);
+            socket.setCryptor(cipher);
             let breakout;
             while (true) {
-                buf = cipher.crypt(await read(socket, 1, {default:0x00}));
+                buf = await socket.read(1);
                 switch (buf[0]) {
                     case 0x00:
                         console.log("EXITCODE");
@@ -173,24 +177,49 @@ const server = net.createServer(
                         breakout = true;
                         break;
                     case 0x01:
-                        // console.log(`connection ${usingID} account registration attempt`);
                         buf = cipher.crypt(await socket.read(72));
                         const usrname = Buffer.from(buf.slice(0, 32)).toString("utf-8");
                         const usrid = buf.slice(32, 40);
                         const password = Buffer.from(buf.slice(40, 72)).toString("utf-8");
-                        // console.log(`DETAILS\n${formatBuf(usrname)}, ${formatBuf(usrid)}, ${formatBuf(password)}`);
                         if (reduceToHex(usrid) in userIdDb) {
-                            enwrite(0x01);
+                            socket.write(0x01);
                             break;
                         }
                         userIdDb[reduceToHex(usrid)] = [usrname, password];
                         if (unsafe_logs) {
                             logger.mkLog(`${usingID} registered account "${usrname}" with password "${password}"`);
                         }
-                        enwrite(0x03);
+                        socket.write(0x03);
+                        break;
+                    case 0x03:
+                        socket.bundle();
+                        socket.write(bigToBytes(Object.keys(server_policies).length, 2));
+                        for (const key in server_policies) {
+                            const val = server_policies[key];
+                            socket.write(val.id);
+                            const expkey = stringToBuffer(key);
+                            socket.write(bigToBytes(expkey.length, 4));
+                            socket.write(expkey);
+                            if (val.type === "bool") {
+                                socket.write(0x01);
+                                socket.write(val.value ? 0x02 : 0x01);
+                            } else if (val.type === "number") {
+                                socket.write(0x02);
+                                socket.write(bigToBytes(val.value, 4));
+                            } else if (val.type === "string") {
+                                socket.write(0x03);
+                                const v2 = stringToBuffer(val.value);
+                                socket.write(bigToBytes(v2.length, 4));
+                                socket.write(v2);
+                            } else {
+                                socket.write(0x04);
+                            }
+                        }
+                        socket.flush();
                         break;
                     default:
-                        enwrite(0xff);
+                        socket.write(0xff);
+                        // enwrite(0xff);
                         break;
                 }
                 if (breakout) break;
@@ -229,4 +258,4 @@ const server = net.createServer(
         }
         socket.end();
     }
-).listen(Number(argv[2]) || 15652);
+).listen(port);

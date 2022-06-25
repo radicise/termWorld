@@ -9,6 +9,24 @@
         <input type="button" value="back" id="back-btn">
         <div id="host-list"></div>
         <div id="auth-list"></div>
+        <input type="button" value="configure" id="config-btn" class="disabled">
+        <div id="config-panel" hidden>
+            <div id="conf-login-panel">
+                <div>
+                <input type="password" placeholder="enter config password" id="conf-login-pass"><br><br>
+                <input type="button" value="login" id="conf-login-btn">
+                </div>
+            </div>
+            <div id="auth-config-panel" class="config-panel" hidden>
+                <span>AUTH SERVER CONFIG</span>
+                <div id="auth-policies" class="policy-list"></div>
+            </div>
+            <div id="host-config-panel" class="config-panel" hidden>
+                <span>HOST SERVER CONFIG</span>
+                <div id="host-policies" class="policy-list"></div>
+            </div>
+            <input type="button" value="exit" id="exit-config-btn">
+        </div>
         <script src="../js/manage.js"></script>
     </body>
 </html>

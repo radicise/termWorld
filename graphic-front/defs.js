@@ -40,6 +40,8 @@ class InvalidDataError extends Error {
  * generates a hash
  * @param {Buffer|number[]|number} nums number to hash
  * @returns {number[]}
+ * @example <caption>hashing a password using ```stringToBuffer```</caption>
+ * hash(Buffer.concat([stringToBuffer("my password"), Buffer.from(SOMEID)]));
  */
 function hash (nums) {
     nums = Array.isArray(nums) ? Buffer.from(nums) : (Buffer.isBuffer(nums) ? nums : Buffer.of(nums));
@@ -59,9 +61,9 @@ function hash (nums) {
  * @returns {[KeyObject, KeyObject]}
  */
 function generateKeyPair () {
-    const KEYPAIR = generateKeyPairSync("rsa", {modulusLength:4096,publicKeyEncoding:{type:"spki",format:"pem"},privateKeyEncoding:{type:"pkcs8",format:"pem",cipher:"aes-256-cbc",passphrase:""}});
+    const KEYPAIR = generateKeyPairSync("rsa", {modulusLength:4096,publicKeyEncoding:{type:"spki",format:"pem"},privateKeyEncoding:{type:"pkcs8",format:"pem",cipher:"aes-256-cbc",passphrase:"a"}});
     const privateKeyS = KEYPAIR.privateKey;
-    let privateKey = createPrivateKey({key:privateKeyS,type:"pkcs1",format:"pem",passphrase:"",encoding:"utf-8"});
+    let privateKey = createPrivateKey({key:privateKeyS,type:"pkcs8",format:"pem",passphrase:"a",encoding:"utf-8"});
     let publicKey = createPublicKey(privateKey);
     return [publicKey, privateKey];
 }
@@ -73,7 +75,21 @@ const c = "0123456789abcdef";
  * @type {"utf-8"|"utf8"|"utf-16"|"utf16"|"ascii"}
  */
 
-
+/**
+ * provides helper methods on {@link Socket}
+ * 
+ * the methods ```NSocket``` overrides are: {@link NSocket.read}, {@link NSocket.write}, {@link NSocket.end}
+ * 
+ * ```NSocket``` also adds four new methods: {@link NSocket.bundle}, {@link NSocket.flush}, {@link NSocket.setCryptor}, {@link NSocket.setUseEncryption}
+ * 
+ * @example <caption>creating a new NSocket</caption>
+ * const socket = new NSocket();
+ * socket.connect(port, ip);
+ * const numbers = await socket.read(4);
+ * @example <caption>creating an NSocket from an existing Socket</caption>
+ * socket = NSocket.from(socket);
+ * const numbers = await socket.read(4);
+ */
 class NSocket extends Socket {
     constructor () {
         super();
@@ -129,6 +145,8 @@ class NSocket extends Socket {
     }
     /**
      * bundles the {@link NSocket.write} commands until {@link NSocket.flush} is called
+     * 
+     * use this to bundle any write commands that can be sent together to reduce network load
      */
     bundle () {
         this.do_flush = false;
@@ -139,7 +157,7 @@ class NSocket extends Socket {
     flush () {
         this.do_flush = true;
         if (this.bundled.length === 0) return true;
-        this.write(Buffer.concat(this.bundled));
+        this._owrite(Buffer.concat(this.bundled));
         this.bundled = [];
         return false;
     }
@@ -192,22 +210,26 @@ class NSocket extends Socket {
      * @returns {Promise<void>}
      */
     write (data, strIsUtf8) {
-        if (this.ending) return;
-        if (this.cryptor !== null && this.cryptor !== undefined && this.use_cryptor) {
-            data = this.cryptor.crypt(data, strIsUtf8);
-        }
-        if (typeof data === "string") {
-            this._wwrite(data);
-        } else if (typeof data === "number") {
-            this._wwrite(Uint8Array.of(data & 0xff));
-        } else {
-            this._wwrite(Uint8Array.from(data));
-        }
+        const that = this;
         return new Promise((res, _) => {
-            this.once("drain", res);
+            if (that.ending) return res();
+            if (that.cryptor !== null && that.cryptor !== undefined && that.use_cryptor) {
+                data = that.cryptor.crypt(data, strIsUtf8);
+            }
+            if (typeof data === "string") {
+                that._wwrite(data);
+            } else if (typeof data === "number") {
+                that._wwrite(Uint8Array.of(data & 0xff));
+            } else {
+                that._wwrite(Uint8Array.from(data));
+            }
+            if (this.do_flush) {
+                that.once("drain", res);
+            } else {
+                res();
+            }
         });
     }
-    //{{default?:number|number[]|Buffer,format?:"number"|"array"|"buffer"|"string",encoding?:"utf-8"|"utf8"|"utf-16"|"utf16"}}
     /**
      * @typedef readOptions
      * @type {object}
@@ -229,16 +251,18 @@ class NSocket extends Socket {
             options.default = typeof options.default === "number" ? Buffer.alloc(1, options.default) : Array.isArray(options.default) ? Buffer.from(options.default) : options.default;
         }
         const that = this;
+        let defaulted = false;
         function toCall (r) {
             // try {
             buf = that._oread(size);
             // } catch (e) {e.stack += evE.stack; throw e;}
             if (that.readableEnded) {
+                defaulted = true;
                 buf = options?.default ?? Buffer.of(0x00);
             }
             if (buf !== null) {
-                if (that.cryptor !== null && that.cryptor !== undefined && that.use_cryptor) {
-                    data = that.cryptor.crypt(data, strIsUtf8);
+                if (that.cryptor !== null && that.cryptor !== undefined && that.use_cryptor && !defaulted) {
+                    buf = that.cryptor.crypt(buf, !["utf-16", "utf16"].includes((options?.encoding ?? "utf-8")));
                 }
                 switch (options?.format) {
                     case "number":
@@ -296,7 +320,8 @@ function stringToBuffer (str, asascii, padto, padwith) {
         }
         f.push(x & 0xff);
     }
-    if (padto ?? false) while (f.length < padto) f.push(padwith);
+    if (padto ?? false) {while (f.length < padto) {f.push(padwith);}}
+    // console.log(f.length, "FLEN");
     return Buffer.from(f);
 }
 
@@ -635,15 +660,16 @@ function resolveServerAddr (addr) {
  * @param {SAddr} addr address to connect to
  * @param {NSocket} sock socket to connect with
  * @param {(ret:string, hadErr:boolean) => void} cb callback for logs
- * @returns {Promise<void>}
+ * @returns {Promise<boolean>}
  */
 function vConnect (addr, sock, cb) {
     return new Promise((res, _) => {
         resolveServerAddr(addr).then(([a, m, e]) => {
-            if (e) {res(); return cb(m, true);}
+            // console.log(e, a);
+            if (e) {cb(m, true); return res(false); }
             sock.connect(a, addr.port);
             cb(m, false);
-            res();
+            res(true);
         });
     });
 }

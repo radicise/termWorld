@@ -1,0 +1,121 @@
+input {
+    outline : none;
+}
+
+#back-btn {
+    position : absolute;
+    left : 50vw;
+    top : 5vh;
+    transform : translate(-50%, 0%);
+}
+
+#config-btn {
+    position : absolute;
+    left : 50vw;
+    top : 75vh;
+    transform : translate(-50%, 0%);
+}
+
+#config-btn.disabled {
+    background : #777;
+    color : #aaa;
+}
+
+#host-list {
+    position : absolute;
+    left : 25vw;
+    top : 10vh;
+    height : 40vh;
+    transform : translate(-50%, 0%);
+}
+
+#auth-list {
+    position : absolute;
+    left : 75vw;
+    top : 10vh;
+    height : 40vh;
+    transform : translate(-50%, 0%);
+}
+
+.server-address {
+    border : solid gray 2px;
+    font-family : 'Source Code Pro', Courier, monospace;
+    padding : 2px;
+    margin-bottom : 4px;
+    user-select : none;
+    cursor : pointer;
+}
+
+.server-address:hover {
+    background : #333;
+}
+
+.server-address:active {
+    background : #222;
+}
+
+.server-address.selected {
+    border : solid dimgray 2px;
+}
+
+#config-panel {
+    position : absolute;
+    left : 0px;
+    top : 0px;
+    width : 100vw;
+    height : 100vh;
+    background-color : #444;
+}
+
+#exit-config-btn {
+    position : absolute;
+    left : 50vw;
+    top : 75vh;
+    transform : translate(-50%, 0%);
+}
+
+#conf-login-panel {
+    position : absolute;
+    left : 0px;
+    top : 0px;
+    width : 100vw;
+    height : 75vh;
+}
+
+#conf-login-panel > div {
+    position : absolute;
+    left : 50vw;
+    top : 50vh;
+    height : 50vh;
+    transform : translate(-50%, 0%);
+    text-align : center;
+}
+
+.config-panel > span:first-child {
+    position : absolute;
+    left : 50vw;
+    top : 5vh;
+    transform : translate(-50%, 0%);
+    user-select : none;
+}
+
+.policy-list {
+    position : absolute;
+    left : 50vw;
+    top : 10vh;
+    transform : translate(-50%, 0%);
+    user-select : none;
+    height : 50vh;
+}
+
+.policy-list > div {
+    border : solid gray 2px;
+    padding : 2px;
+    margin-bottom : 4px;
+    display : grid;
+    grid-template-columns : 3fr 5fr 2fr;
+}
+
+.policy-list > div > span:last-child {
+    text-align : end;
+}

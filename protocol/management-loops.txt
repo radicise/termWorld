@@ -1,5 +1,7 @@
 used to remotely configure Host and Auth servers
 
+NOTE: it will not be specified to have permission levels and different implementations may handle this differently
+
 Client -> Server: 0x01
 Server -> Client: <public key length> + <public key>
 Client -> Server: <encrypted length> + encrypt ( <password> )
@@ -21,19 +23,30 @@ COMMON {
     if (opid == 0x00) {
         <disconnection>
     }
+    // update policy
+    if (opid == 0x01) {
+        Client -> Server: <policy id> see "policies" for more
+        Server -> Client: 0x63 if policy exists else 0x55
+        Client -> Server: 0x01 for "GET" 0x02 for "SET"
+        if "GET" {
+            Server -> Client : <policy type>
+            Server -> Client : <policy value>
+        }
+        if "SET" {
+            Client -> Server {
+                if policy is boolean : 0x01 = false, 0x02 = true
+                if policy is number : 4 byte signed number
+                if policy is string : <string length in bytes> + <string>
+            }
+            Server -> Client: 0x63 for success, 0x55 for failure
+        }
+    }
+    if (opid == 0x03) {
+        execute ( <fetch-policies> )
+    }
 }
 
 FOR HOSTS {
-    // update policy
-    if (opid == 0x01) {
-        Client -> Host: <policy id> see "policies" for more
-        Client -> Host {
-            if policy is boolean : 0x01 = false, 0x02 = true
-            if policy is number : 4 byte signed number
-            if policy is string : <string length in bytes> + <string>
-        }
-        Host -> Client: 0x63 for success, 0x55 for failure
-    }
     if (opid == 0x02) {
         execute ( <server-secret-update-protocol> )
         if success {
@@ -41,20 +54,11 @@ FOR HOSTS {
         } else {
             Host -> Client: 0x55
         }
+        Host -> Client: <number succeeded> + <number failed> (numbers are 1 byte signed ints)
     }
 }
 
 FOR AUTHS {
-    // update policy
-    if (opid == 0x01) {
-        Client -> Auth: <policy id> see "policies" for more
-        Client -> Auth {
-            if policy is boolean : 0x01 = false, 0x02 = true
-            if policy is number : 4 byte signed number
-            if policy is string : <string length in bytes> + <string>
-        }
-        Auth -> Client: 0x63 for success, 0x55 for failure
-    }
     // allows invalidating or renaming accounts that have the same name
     if (opid == 0x02) {
         Auth -> Client: 0x63 if <require-unique-names> is enabled, 0x55 otherwise ON 0x55 THE OPERATION IS TERMINATED
@@ -69,7 +73,20 @@ FOR AUTHS {
     }
 }
 
+fetch-policies:
+Server -> Client: <2-byte unsigned integer> number of policies being sent
+FOR EACH POLICY {
+    Server -> Client: <policy id>
+    Server -> Client: <4-byte int> length of policy name
+    Server -> Client: <policy name>
+    Server -> Client: <policy type>
+    Server -> Client: <policy value> (see opid 0x01 in management loops for info on how to send policy values)
+}
+<END PROTOCOL>
+
 policies:
+
+types: 0x01 for boolean, 0x02 for 32-bit signed integer, 0x03 for string, 0x04 for types that can't be serialized
 
 Host policies {
     0 allow-no-authentication-servers - boolean - when true, allows players to join without authenticating if the server has no authentication server. when false authentication fails automatically

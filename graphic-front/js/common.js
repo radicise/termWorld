@@ -118,6 +118,7 @@ class ServerDescriptor {
  * @property {number} ip_format
  * @property {any} ip
  * @property {number} port
+ * @property {object} meta
  */
 
 exports.ServerDescriptor = ServerDescriptor;

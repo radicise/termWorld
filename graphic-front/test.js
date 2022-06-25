@@ -1,45 +1,13 @@
-const { symmetricEncrypt, symmetricDecrypt } = require("./keygen");
-const { createCipheriv, createDecipheriv } = require("crypto");
-const { stringToBuffer } = require("./string-to-buf");
-const { read } = require("./block-read");
+const { SymmetricCipher } = require("./defs");
 
-const key = Buffer.alloc(32, 0);
-key.write("my key", "utf-8");
+const cipher = new SymmetricCipher(Buffer.of(0x73, 0x36, 0xf6, 0x1a, 0xe0, 0x2d, 0xac, 0x22, 0x3f, 0x87, 0x38, 0x0e, 0x87, 0x28, 0x3f, 0xdf, 0x1b, 0xbd, 0xfd, 0xca, 0x1f, 0x85, 0xbb, 0x7a, 0x92, 0x6b, 0x8e, 0x56, 0x4b, 0x65, 0x86, 0x9f));
 
-const text = "Hello, World!";
+cipher.key_position = 3;
 
-// let encrypted = symmetricEncrypt(key, stringToBuffer(text));
+const enc = cipher.crypt(0);
 
-// console.log(symmetricDecrypt(key, encrypted).toString("utf-8"));
+cipher.key_position = 1;
 
-async function main () {
-    let cipher = new StreamCipher("a", "my key");
-    let decipher = new StreamCipher("a", "my key", 20, false);
-    // cipher.digest.pause();
-    let input = Readable.from(stringToBuffer(text));
-    // let s = Buffer.alloc(0);
-    // let output = new Duplex({write:(c)=>{s=Buffer.concat([s,c]);},read:(size)=>{size=size ?? s.length;console.log(size);if(size>=s.length){return null;}const ret=s.slice(0,size);s=s.slice(size);return ret;}});
-    let output = createWriteStream("test.txt");
-    // output.pause();
-    input.pipe(cipher.digest).pipe(decipher.digest).pipe(output);
-    // cipher.digest.push(stringToBuffer(text));
-    // console.log(output.read(1));
-    // let cinput = new Duplex();
-    // let coutput = new Duplex();
-    // let douput = new Duplex();
-    // douput.pause();
-    // cinput.write(text);
-    // cinput.pipe(cipher.digest).pipe(decipher.digest).pipe(douput);
-    // console.log(douput.read());
-    // cipher.digest.write(stringToBuffer(text));
-    // decipher.digest.pause();
-    // decipher.digest.write(cipher.digest.read());
-    // console.log(await read(decipher.digest, 1));
-    // let cipher = createCipheriv("aes256", key, Buffer.alloc(16, 0));
-    // cipher.pause();
-    // cipher.write(stringToBuffer(text));
-    // let buf = await read(cipher, 13);
-    // console.log(Buffer.from(buf).toString());
-}
+const dec = cipher.crypt(Buffer.of(0x36, 0xf7));
 
-main();
+console.log(enc, dec);
