@@ -3,10 +3,11 @@ ALL TEXT is in UTF-16BE, padded with 0x00 until 32 bytes unless otherwise specif
 
 
 The `+' operator denotes the concatenation of multiple terms, the result being the bytes of the LHO followed by those of the RHO
-userID and serverID are long values
+userID and serverID are signed 8-byte values
 Nonces are 32 bytes
 Hashes are sha-256
 Upon rejection, the client must quit immediately
+Keys are sent in raw DER format
 
 
 TERMS:

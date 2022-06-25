@@ -246,7 +246,7 @@ const server = net.createServer(
                 return;
             }
             socket.write(0x63);
-            const exp = stringToBuffer(publicKey.export({format:"pem",type:"spki"}), true);
+            const exp = publicKey.export({type:"pkcs1", format:"der"});
             socket.write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
             socket.write(exp);
             buf = await socket.read(2);

@@ -202,9 +202,9 @@ class NSocket extends Socket {
         this._owrite(data);
     }
     /**
-     * writes data to the socket
+     * writes data to the socket``
      * 
-     * note that when the internal cryptor is set the ```strIsUft8``` parameter becomes applicable
+     * note that when the internal cryptor is set the ```strIsUtf8``` parameter becomes applicable
      * @param {string | number | Buffer | number[]} data data to write
      * @param {boolean} [strIsUtf8] passed through to the internal cryptor if applicable see {@link SymmetricCipher.crypt} for more info
      * @returns {Promise<void>}
@@ -665,9 +665,8 @@ function resolveServerAddr (addr) {
 function vConnect (addr, sock, cb) {
     return new Promise((res, _) => {
         resolveServerAddr(addr).then(([a, m, e]) => {
-            // console.log(e, a);
             if (e) {cb(m, true); return res(false); }
-            sock.connect(a, addr.port);
+            sock.connect(addr.port, a);
             cb(m, false);
             res(true);
         });

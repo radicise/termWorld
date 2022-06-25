@@ -1,11 +1,10 @@
 require("dotenv").config();
 const net = require("net");
 const { randomBytes, publicEncrypt, createPublicKey, privateDecrypt } = require("crypto");
-const dns_lookup = require("dns").lookup;
-const { hash, Logger, formatBuf, stringToBuffer, asHex, NSocket, bigToBytes, bufferToString, mkTmp, SAddr, vConnect, SymmetricCipher, generateKeyPair, bytesToBig } = require("./defs");
+const { hash, Logger, formatBuf, stringToBuffer, NSocket, bigToBytes, bufferToString, mkTmp, SAddr, vConnect, SymmetricCipher, generateKeyPair, bytesToBig } = require("./defs");
 const { readFileSync, existsSync } = require("fs");
 const join_path = require("path").join;
-
+const gameVersion = 2;//update upon update
 const plugin_reg_path = join_path(__dirname, "data", "server", "plugins.json");
 
 mkTmp(["data", "server", "plugins.json"], "{}");
@@ -50,7 +49,28 @@ const port = 15651;
 const serverID = Array.from(Buffer.alloc(8, 0));
 let serverPassword = "password";
 
-
+/**
+ * @param {Buffer} buf the buffer to write the data to
+ * @param {number} off the offset at which to start writing the data
+ * @param {number} x the old x-coordinate
+ * @param {number} y the old y-coordinate
+ * @param {number} xp the new x-coordinate
+ * @param {number} yp the new y-coordinate
+ * @returns {number} the new buffer offset
+ */
+function addMoveData (buf, off, x, y, xp, yp) {
+    buf.writeUInt8(0x04, off);
+    off++;
+    buf.writeInt32BE(x, off);
+    off += 4;
+    buf.writeInt32BE(y, off);
+    off += 4;
+    buf.writeInt32BE(xp, off);
+    off += 4;
+    buf.writeInt32BE(yp, off);
+    off += 4;
+    return off;
+}
 /**
  * @typedef ServerPlugin
  * @type {object}
@@ -62,7 +82,7 @@ let serverPassword = "password";
  * 
  * 1 - spawnObstructionResolver
  * @property {(name:string,id:number[],policies:object,counts:object) => [boolean, string]} [denyPlayerLogin] checks if a player login should be denied
- * @property {() => boolean} [spawnObstructionResolver] attempts to resolve player spawn obstruction. returns true on success and false otherwise NOT FULLY DEFINED YET
+ * @property {([number, number]) => [number, number]} [spawnObstructionResolver] determines spawing of any entity that is added to the level, even if it has not been proven that the desired spawn location is occupied. Input is a desired location in [x, y] format, output is the location chosen by the function in [x, y] format. Vanilla implementation returns same coordinates as input when unobstructed.
  */
 
 /**@type {{name:string,type:"bool"|"number"|"string",id:number,value:boolean|number|string}[]} */
@@ -81,7 +101,85 @@ let server_policies = [
     }
 ];
 
-
+/**
+ * @typedef Entity
+ * @type {object}
+ * @property {number} etype entity type
+ * @property {number} termColor terminal ansi-style color code, 16 if no specific color for this entity
+ * @property {number} health amount of health
+ * @property {number[]} inventory inventory, inventory[<even number n>] contains the item ID for the slot <n / 2> while inventory[<n + 1>] contains the corresponding item amount, not surpassing 127. In entity-items, this only holds the item held by the entity-item.
+ * @property {number} [regenFrame] regen frame, 0 - 15, dogs only. dog regenerates when (((level_age ^ regenFrame) & 0xf) == 0)
+ */
+class Entity {
+    static invSizes = [0, 2, 15, 1, 0];
+    /**
+     * @param {number} type entityTypeID
+     */
+    constructor(type) {
+        this.etype = type;
+        this.termColor = 16;
+        if (this.etype > 0) {
+            this.termColor = randomInt(8, 16);
+        }
+        this.health = 10
+        if (this.etype == 1) {
+            this.regenFrame = randomInt(0, 15);
+        }
+        this.inventory = new Array(Entity.invSizes[type] * 2);
+    }
+    /**
+     * serializes level data to a given buffer
+     * @param {Buffer} buf buffer to write serialized data to
+     * @param {number} off offset in buffer
+     * @param {number} x entity's x-coordinate
+     * @param {number} y entity's y-coordinate
+     * @returns {number} the buffer offset after writing
+     */
+    serialize (buf, off, x, y) {
+        buf.writeUInt8(this.etype, off);
+        off++;
+        if (this.etype == 4) {
+            return off;
+        }
+        if ((this.etype == 1) || (this.etype == 2)) {
+            buf.writeUInt32BE(Entity.invSizes[this.etype], off);
+            off += 4;
+            for (let i = 0; i < Entity.invSizes[this.etype]; i++) {
+                if (this.inventory[i * 2] == undefined) {
+                    buf.writeUInt8(0, off);
+                    off++;
+                    continue;
+                }
+                if (this.inventory[(i * 2) + 1] == 0) {
+                    buf.writeInt8(0xff, off);
+                }
+                else {
+                    buf.writeInt8(this.inventory[(i * 2) + 1], off);
+                }
+                off++;
+                buf.writeUInt8(this.inventory[i * 2], off);
+                off++;
+            }
+        }
+        buf.writeUInt32BE(x, off);
+        off += 4;
+        buf.writeUInt32BE(y, off);
+        off += 4;
+        if (this.etype == 3) {
+            //TODO serialize item data
+        }
+        if (this.etype == 2) {
+            buf.writeBigInt64BE(BigInt(((this.termColor & 0xf) << 6) ^ (this.regenFrame & 0xf)), off);
+        }
+        else {
+            buf.writeBigInt64BE(BigInt((this.termColor & 0xf) << 6), off);
+        }
+        off += 8;
+        buf.writeInt16BE(this.health, off);
+        off += 2; 
+        return off;
+    }
+}
 class Host {
     constructor () {
         this.name = "DEFAULT SERVER";
@@ -91,9 +189,15 @@ class Host {
         this.max_players = ((mpargv ? Number(mpargv.split("=")[1]) : null) ?? Number(process.env.maxplay)) || 10;
         /**@type {NSocket[]} */
         this.connected = [];
+        /**@type {Map<number, Entity} */
+        this.entities = new Map();
         this.level_age = 0;
+        const lsxargv = argv.find(v => v.startsWith("--lspawnx="));
+        const lsyargv = argv.find(v => v.startsWith("--lspawny="));
         const lwargv = argv.find(v => v.startsWith("--lwidth="));
         const lhargv = argv.find(v => v.startsWith("--lheight="));
+        this.level_spawnx = ((lsxargv ? Number(lsxargv.split("=")[1]) : null) ?? Number(process.env.lspawnx)) || 1;
+        this.level_spawny = ((lsyargv ? Number(lsyargv.split("=")[1]) : null) ?? Number(process.env.lspawny)) || 1;
         this.level_width = ((lwargv ? Number(lwargv.split("=")[1]) : null) ?? Number(process.env.lwidth)) || 10;
         this.level_height = ((lhargv ? Number(lhargv.split("=")[1]) : null) ?? Number(process.env.lheight)) || 10;
         this.level_data = [];
@@ -105,8 +209,16 @@ class Host {
             /**@type {Function[]} */
             spawnObstructionResolver : [],
         };
+        for (const h in this.plugins) {
+            if ((h.service_register & 1) == 1) {
+                this.listeners.checkPlayerDeny.push(h);
+            }
+            if ((h.service_register & 2) == 2) {
+                this.listeners.checkPlayerDeny.push(h.spawnObstructionResolver);
+            }
+        }
         for (let y = 0; y < this.level_height; y ++) {
-            let row = [];
+            let row = new Array(0);
             for (let x = 0; x < this.level_width; x ++) {
                 row.push(0);
             }
@@ -122,8 +234,49 @@ class Host {
         ];
         /**@type {Buffer} */
         this.secret;
+        /**@type {Buffer} */
+        this.animationBuffer = Buffer.alloc(4096);//TODO set through lanch arguments
         this.regenerateSecret();
         this.reloadPlugins();
+        /**@type {number} */
+        this.bufOff = 0;
+        this.entities.set((3 * this.level_width) + 2, new Entity(1));
+        setInterval(this.animateFrame.bind(this), this.turn_interval);
+    }
+    /**
+     * serializes level data to a given buffer
+     * @param {Buffer} buf buffer to write serialized data to
+     * @param {number} off offset of write start
+     * @returns {number} the buffer offset after writing
+     */
+    serializeLevelData (buf, off) {
+        buf.writeInt32BE(gameVersion, off);
+        off += 4;
+        buf.writeInt32BE(this.level_width, off);
+        off += 4;
+        buf.writeInt32BE(this.level_height, off);
+        off += 4;
+        buf.writeInt32BE(1024, off);//TODO Make this actually mean something
+        off += 4;
+        for (let i = 0; i < this.level_data.length; i++) {
+            for (let j = 0; j < this.level_data[i].length; j++) {
+                buf.writeUint8(this.level_data[i][j], off);
+                off++;
+            }
+        }
+        buf.writeBigInt64BE(BigInt(this.level_age), off);
+        off += 8;
+        buf.writeInt32BE(this.level_spawnx, off);
+        off += 4;
+        buf.writeInt32BE(this.level_spawny, off);
+        off += 4;
+        buf.writeInt32BE(this.entities.size, off);
+        off += 4;
+        this.entities.forEach(function (pos, ent) {
+            let h = this.sptv(ent);
+            off = pos.serialize(buf, off, h[0], h[1]);
+        }, this);
+        return off;
     }
     /**
      * reloads the server plugins
@@ -182,7 +335,7 @@ class Host {
                         sock.write(ret);
                         if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: unknown reason"); fail ++; return res(sock.end());}
                         good ++;
-                        bundle.mkLog("successfully updated server secret");
+                        bundle.mkLog(`successfully updated server secret for auth server at ${["IPv4", "IPv6", "hostname"][addr.id]} ${addr.address} port ${addr.port}` + (unsafe_logs ? ` to ${formatBuf(this.secret)}` : ""));
                         res(sock.end());
                     });
                     vConnect(addr, sock, (ret, hadErr) => {
@@ -198,16 +351,117 @@ class Host {
      * checks if a player should be denied access even with valid auth eg: player was banned
      * @param {string} name name of player
      * @param {number[]} id player id
+     * @param {number} ver player version
      * @returns {[boolean, string]}
      */
-    checkPlayerDeny (name, id) {
+     checkPlayerDeny (name, id, ver) {
         for (const check of this.listeners.checkPlayerDeny) {
             const km = check.denyPlayerLogin(name, id, server_policies, {players:this.connected.length});
             if (km[0]) {
                 return km;
             }
         }
+        if (ver != gameVersion) {
+            return [true, "outdated client version"]
+        }
         return [false, ""];
+    }
+    /**
+     * decides all entity spawn positions
+     * @param {number} x desired x-coordinate
+     * @param {number} y desired y-coordinate
+     * @returns {[number, number]|null} decided spawn coordinates in [x, y] format, or null, if the spawn is denied
+     */
+    resolveSpawning (x, y) {
+        for (const res of this.listeners.spawnObstructionResolver) {
+            return res(x, y)
+        }
+        if ((typeof (this.entities.get(this.vpts(x, y)))) == undefined) {
+            return null;
+        }
+        return ([x, y]);
+    }
+    /**
+     * attempts to move the entity at one coordinate posititon by a given vector
+     * 
+     * @param {number} curX entity's current x-coordinate
+     * @param {number} curY entity's current y-coordinate
+     * @param {number} byX movement by X
+     * @param {number} byY momvement by Y
+     * @param {number} depth recursion depth
+     * @returns {boolean} if the entity was moved by the specified vector by this call of the function
+     */
+    moveEntBy(oldX, oldY, byX, byY, depth) {
+        if (depth > 15) {
+            return false;
+        };
+        
+        if (oldX + byX < 0) {
+            byX = -oldX;
+        }
+        if (oldX + byX >= this.level_width) {
+            byX = (this.level_width - oldX) - 1;
+        }
+        if (oldY + byY < 0) {
+            byY = -oldY;
+        }
+        if (oldY + byY >= this.level_height) {
+            byY = (this.level_height - oldY) - 1;
+        }
+        
+        //TODO damage if depth is more than 0
+        
+        let sc = this.vpts(oldX + byX, oldY + byY);
+        if ((typeof (this.entities.get(sc))) == 'undefined') {
+            let po = this.vpts(oldX, oldY);
+            let thg = this.entities.get(po);
+            this.entities.delete(po);
+            this.entities.set(sc, thg);
+            this.bufOff = addMoveData(this.animationBuffer, this.bufOff, oldX, oldY, oldX + byX, oldY + byY);
+            return true;
+        }
+        
+        //TODO implement pushing other entities and item pickup
+        
+        return false;
+    }
+    /** 
+     * @param {number} x x-coordinate
+     * @param {number} y y-coordinate
+     * @returns {number} scalar representation of the passed coordinates
+    */
+    vpts(x, y) {
+        return ((y * this.level_width) + x);
+    }
+    /** 
+     * @param {number} s scalar representation of the coordinates
+     * @returns {[number, number]} vector representation of the passed scalar-represented coordinates
+    */
+    sptv(s) {
+        return ([s % this.level_width, Math.floor(s / this.level_width)]);
+    }
+    /**
+     * performs one animation frame and then sends the level update data to clients along with the 0x02 byte for rendering the frame client-side
+     * @returns {number} amount of bytes written to each client from the animation buffer as part of the animation
+     */
+    animateFrame() {
+        this.entities.forEach(function (treb, hee) {
+            switch (treb.etype) {
+                case (1):
+                    let scpo = this.sptv(hee);
+                    this.moveEntBy(scpo[0], scpo[1], randomInt((-1), 2), randomInt((-1), 2), 0);
+                    break;
+            }
+        }, this);
+        this.animationBuffer.writeUInt8(0x02, this.bufOff);
+        this.bufOff++;
+        let subToSend = this.animationBuffer.subarray(0, this.bufOff);
+        for (let p = 0; p < this.connected.length; p++) {
+            this.connected[p].write(subToSend);
+        }
+        let h = this.bufOff;
+        this.bufOff = 0;
+        return h;
     }
     /**
      * @param {NSocket} socket
@@ -226,11 +480,25 @@ class Host {
             socket.write(0x55);
             socket.end();
         } else {
-            socket.write([0x63, 0x00]);
-            await socket.read(1);
-            const km = this.checkPlayerDeny(name, authdata.slice(32, 40));
+            socket.write(0x63);
+            socket.write([(gameVersion >>> 24) & 0xff, (gameVersion >>> 16) & 0xff, (gameVersion >>> 8) & 0xff, gameVersion & 0xff]);
+            let treatAsVer = await socket.read(4);
+            treatAsVer = (((((treatAsVer[0] << 8) ^ treatAsVer[1]) << 8) ^ treatAsVer[2]) << 8) ^ treatAsVer[3];
+            const userID = authdata.slice(32, 40);
+            logger.mkLog(`Player is joining, userID=${userID}`)
+            const km = this.checkPlayerDeny(name, authdata.slice(32, 40), treatAsVer);
             if (km[0] ?? false) {
                 const bufmsg = stringToBuffer(km[1] ?? "reason not provided");
+                socket.bundle();
+                socket.write(0x55);
+                socket.write(bigToBytes(bufmsg.length, 4));
+                socket.write(bufmsg);
+                socket.flush();
+                return socket.end();
+            }
+            const spawnPlace = this.resolveSpawning(this.level_spawnx, this.level_spawny);
+            if (spawnPlace == null) {
+                const bufmsg = stringToBuffer("spawn desired at the spawn point was denied");
                 socket.bundle();
                 socket.write(0x55);
                 socket.write(bigToBytes(bufmsg.length, 4));
@@ -243,9 +511,18 @@ class Host {
             socket.on("cClose", () => {
                 this.connected.splice(this.connected.findIndex(v => v.remoteAddress === remAddr), 1);
             });
+            const sData = Buffer.alloc(1024)//TODO probably change this somehow
+            const numWritten = this.serializeLevelData(sData, 0);
+            socket.write(sData.subarray(0, numWritten));
+            socket.write([(this.turn_interval >>> 8) & 0xff, this.turn_interval & 0xff]);
+            const initialForm = new Entity(2);
+            socket.write([(spawnPlace[0] >>> 24) & 0xff, (spawnPlace[0] >>> 16) & 0xff, (spawnPlace[0] >>> 8) & 0xff, spawnPlace[0] & 0xff, (spawnPlace[1] >>> 24) & 0xff, (spawnPlace[1] >>> 16) & 0xff, (spawnPlace[1] >>> 8) & 0xff, spawnPlace[1] & 0xff]);
             this.connected.push(socket);
+            this.animationBuffer.writeUInt8(0x06, this.bufOff);
+            this.bufOff++;
+            this.bufOff = initialForm.serialize(this.animationBuffer, this.bufOff, spawnPlace[0], spawnPlace[1]);
+            this.entities.set(this.vpts(spawnPlace[0], spawnPlace[1]), initialForm);
         }
-        // socket.write([nonce0, ...serverID]);
         return;
     }
     /**
