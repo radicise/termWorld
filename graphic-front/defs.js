@@ -684,6 +684,17 @@ function eat (arr, count) {
     return arr.splice(0, count);
 }
 
+/**
+ * @param {number} l
+ * @param {number} h
+ * @returns {number}
+ */
+function randomInt (l, h) {
+    l = Math.floor(l);
+    h = Math.floor(h);
+    return Math.floor(Math.random() * (l-h) + l);
+}
+
 exports.SymmetricCipher = SymmetricCipher;
 exports.NSocket = NSocket;
 exports.Logger = Logger;
@@ -702,3 +713,4 @@ exports.mkTmp = mkTmp;
 exports.vConnect = vConnect;
 exports.eat = eat;
 exports.resolveServerAddr = resolveServerAddr;
+exports.randomInt = randomInt;

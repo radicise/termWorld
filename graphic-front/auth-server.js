@@ -69,13 +69,15 @@ setInterval(() => {
     }
 }, 1000);
 
-let server_policies = {
-    "require-unique-names" : {
+/**@type {{name:string,type:"bool"|"number"|"string",id:number,value:boolean|number|string}[]} */
+let server_policies = [
+    {
+        name : "require-unique-names",
         type : "bool",
         id : 0,
         val : false,
     }
-};
+];
 
 const server = net.createServer(
     /**
@@ -194,21 +196,22 @@ const server = net.createServer(
                     case 0x03:
                         socket.bundle();
                         socket.write(bigToBytes(Object.keys(server_policies).length, 2));
-                        for (const key in server_policies) {
-                            const val = server_policies[key];
-                            socket.write(val.id);
+                        for (const pol of server_policies) {
+                            const key = pol.name;
+                            const val = pol.value;
+                            socket.write(pol.id);
                             const expkey = stringToBuffer(key);
                             socket.write(bigToBytes(expkey.length, 4));
                             socket.write(expkey);
-                            if (val.type === "bool") {
+                            if (pol.type === "bool") {
                                 socket.write(0x01);
-                                socket.write(val.value ? 0x02 : 0x01);
-                            } else if (val.type === "number") {
+                                socket.write(val ? 0x02 : 0x01);
+                            } else if (pol.type === "number") {
                                 socket.write(0x02);
-                                socket.write(bigToBytes(val.value, 4));
-                            } else if (val.type === "string") {
+                                socket.write(bigToBytes(val, 4));
+                            } else if (pol.type === "string") {
                                 socket.write(0x03);
-                                const v2 = stringToBuffer(val.value);
+                                const v2 = stringToBuffer(val);
                                 socket.write(bigToBytes(v2.length, 4));
                                 socket.write(v2);
                             } else {
