@@ -30,7 +30,6 @@ public class Entity {
 	void serialize(DataOutputStream dataOut) throws Exception {//TODO Include face value
 		dataOut.write(type);
 		if (type == 4) {//Supports plugin Entity-subclass objects without making serialization implementation a compulsory and redundant thing for the plugin
-			System.out.println("wefufhwhefBHJBHJBHJBHJJBHBH");
 			return;
 		}
 		dataOut.writeInt(x);

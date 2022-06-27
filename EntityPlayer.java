@@ -3,6 +3,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 class EntityPlayer extends Entity {
 	static final int invSpace = 15;
+	byte cooldown;
 	int p;
 	EntityPlayer(int x, int y, long data, short health) {
 		type = 2;
@@ -33,6 +34,7 @@ class EntityPlayer extends Entity {
 		if ((color == 0) || (color == 7) || (color == 8) || (color == 15)) {
 			color = 9;
 		}
+		cooldown = (byte) ((data >>> 11) & 0xff);
 	}
 	void serialize(DataOutputStream dataOut) throws Exception {//TODO Include face value
 		dataOut.write(type);
@@ -46,7 +48,7 @@ class EntityPlayer extends Entity {
 		}
 		dataOut.writeInt(x);
 		dataOut.writeInt(y);
-		dataOut.writeLong(data);
+		dataOut.writeLong((((long) cooldown) << 11) ^ (((long) color) << 6));
 		dataOut.writeShort(health);
 	}
 	static EntityPlayer fromDataStream(DataInputStream readFrom) throws Exception {
@@ -80,38 +82,46 @@ class EntityPlayer extends Entity {
 			}
 			moveBy(mX, mY, 0);
 		}
-		if ((data & 0x10) != 0) {
-			p = (y * Server.level.terrain.width) + x;
-			if (x > 0) {
-				Server.level.terrain.tiles[p - 1] = (byte) (0);
-				Server.buf.put((byte) 10).putInt(p - 1).put((byte) (0));
-			}
-			if (x < (Server.level.terrain.width - 1)) {
-				Server.level.terrain.tiles[p + 1] = (byte) (0);
-				Server.buf.put((byte) 10).putInt(p + 1).put((byte) (0));
-			}
-			Server.level.terrain.tiles[p] = (byte) (0);
-			Server.buf.put((byte) 10).putInt(p).put((byte) (0));
-			p -= Server.level.terrain.width;
-			if (p >= 0) {
+		if (cooldown > 0) {
+			cooldown--;
+		}
+		if (cooldown < 1) {
+			if ((data & 0x10) != 0) {
+				cooldown = 7;
+				p = (y * Server.level.terrain.width) + x;
+				if (x > 0) {
+					Server.level.terrain.tiles[p - 1] = (byte) (0);
+					Server.buf.put((byte) 10).putInt(p - 1).put((byte) (0));
+				}
+				if (x < (Server.level.terrain.width - 1)) {
+					Server.level.terrain.tiles[p + 1] = (byte) (0);
+					Server.buf.put((byte) 10).putInt(p + 1).put((byte) (0));
+				}
 				Server.level.terrain.tiles[p] = (byte) (0);
 				Server.buf.put((byte) 10).putInt(p).put((byte) (0));
+				p -= Server.level.terrain.width;
+				if (p >= 0) {
+					Server.level.terrain.tiles[p] = (byte) (0);
+					Server.buf.put((byte) 10).putInt(p).put((byte) (0));
+				}
+				p += (Server.level.terrain.width * 2);
+				if (p < Server.level.terrain.tiles.length) {
+					Server.level.terrain.tiles[p] = (byte) (0);
+					Server.buf.put((byte) 10).putInt(p).put((byte) (0));
+				}
 			}
-			p += (Server.level.terrain.width * 2);
-			if (p < Server.level.terrain.tiles.length) {
-				Server.level.terrain.tiles[p] = (byte) (0);
-				Server.buf.put((byte) 10).putInt(p).put((byte) (0));
+			if ((data & 0x20) != 0) {
+				cooldown = 4;
+				p = (y * Server.level.terrain.width) + x;
+				Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + 1) % Text.amountAccessible);
+				Server.buf.put((byte) 10).putInt(p).put(Server.level.terrain.tiles[p]);
 			}
-		}
-		if ((data & 0x20) != 0) {
-			p = (y * Server.level.terrain.width) + x;
-			Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + 1) % Text.amountAccessible);
-			Server.buf.put((byte) 10).putInt(p).put(Server.level.terrain.tiles[p]);
-		}
-		if ((data & 0x400) != 0) {
-			p = (y * Server.level.terrain.width) + x;
-			Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + (Text.amountAccessible - 1)) % Text.amountAccessible);
-			Server.buf.put((byte) 10).putInt(p).put(Server.level.terrain.tiles[p]);
+			if ((data & 0x400) != 0) {
+				cooldown = 4;
+				p = (y * Server.level.terrain.width) + x;
+				Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + (Text.amountAccessible - 1)) % Text.amountAccessible);
+				Server.buf.put((byte) 10).putInt(p).put(Server.level.terrain.tiles[p]);
+			}
 		}
 		data &= (~0x43f);
 	}

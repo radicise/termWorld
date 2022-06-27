@@ -23,6 +23,7 @@ public class Client {
 	public static volatile boolean right;
 	public static volatile boolean placed;
 	public static volatile boolean destroyed;
+	public static volatile Short cooldown;
 	static String username;
 	static byte[] unB = new byte[32];
 	static long UID;
@@ -69,6 +70,11 @@ public class Client {
 						placed = true;
 						System.out.print('+');
 						out.write(100);
+						synchronized (cooldown) {
+							if (cooldown == 0) {
+								cooldown = 4;
+							}
+						}
 					}
 					break;
 				case (73):
@@ -76,6 +82,11 @@ public class Client {
 						placed = true;
 						System.out.print('-');
 						out.write(102);
+						synchronized (cooldown) {
+							if (cooldown == 0) {
+								cooldown = 4;
+							}
+						}
 					}
 					break;
 				case (111):
@@ -84,6 +95,11 @@ public class Client {
 						destroyed = true;
 						System.out.print('*');
 						out.write(101);
+						synchronized (cooldown) {
+							if (cooldown == 0) {
+								cooldown = 7;
+							}
+						}
 					}
 					break;
 			}
@@ -233,6 +249,13 @@ public class Client {
 			socket.close();
 			return;
 		}
+		up = false;
+		left = false;
+		down = false;
+		right = false;
+		placed = false;
+		destroyed = false;
+		cooldown = new Short((short) 0);
 		try {
 			new Thread() {
 				public void run() {
@@ -306,6 +329,11 @@ public class Client {
 						Server.level.entities.remove(id);
 					}
 				}
+				synchronized (cooldown) {
+					if (cooldown > 0) {
+						cooldown--;
+					}
+				}
 				if (Text.escapes) {
 					Text.buffered.write("\u001b[2J\u001b[1;1H");
 					Thread.sleep(100);
@@ -334,6 +362,9 @@ public class Client {
 					Text.buffered.write(Integer.toString(Server.level.ent[EID].inventory[Server.level.ent[EID].inventory.length - 1].quantity));
 				}
 				Text.buffered.write('}');
+				Text.buffered.write('<');
+				Text.buffered.write(Short.toString(cooldown));
+				Text.buffered.write('>');
 				Text.buffered.write('(');
 				Text.buffered.write(Integer.toString(Server.level.ent[EID].x));
 				Text.buffered.write(',');
