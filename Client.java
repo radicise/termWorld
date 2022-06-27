@@ -179,7 +179,7 @@ public class Client {
 				System.out.print(',');
 			}
 			System.out.println();
-			*/Arrays.fill(pwB, (byte) 0);
+			/**/Arrays.fill(pwB, (byte) 0);
 			MessageDigest shs = MessageDigest.getInstance("SHA-256");
 			pwB = shs.digest(pHpw);
 			/*for (byte n : pwB) {
@@ -188,7 +188,7 @@ public class Client {
 				System.out.print(',');
 			}
 			System.out.println();
-			*/Arrays.fill(pw, (byte) 0);
+			/**/Arrays.fill(pw, (byte) 0);
 			byte[] toh = new byte[72];
 			System.arraycopy(pwB, 0, toh, 0, 32);
 			System.arraycopy(nonce1, 0, toh, 32, 32);

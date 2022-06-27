@@ -1,12 +1,15 @@
 package termWorld;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.TreeMap;
 public class Level {
 	public Entity[] ent;//read below
 	public FixedFrame terrain;
 	public TreeMap<Long, Integer> entities;//read below
+	public static final int roomWidth = 5;
+	public static final int roomHeight = 4;
 	public long age;
 	public int VID;
 	public int spawnX;
@@ -128,13 +131,66 @@ public class Level {
 		int entSize = 1024;
 		Entity[] ent = new Entity[entSize];
 		int r;
-		int ePlace = 0;
-		for (int i = 0; i < terrain.length; i++) {
-			r = rand.nextInt();
-			if (r < -((Integer.MAX_VALUE / 2) + 1)) {
-				terrain[i] = 1;
+		int s;
+		int i;
+		int j;
+		int h;
+		int spawnX = 0;
+		int spawnY = 0;
+		Arrays.fill(terrain, (byte) 1);
+		for (i = 0; i < (terrain.length / 128); i++) {
+			r = (width * (spawnY = (rand.nextInt(height - roomHeight - 1) + 1))) + (spawnX = (rand.nextInt((width - roomWidth) - 1) + 1));
+			for (s = r; s < (r + (roomHeight * width)); s += width) {
+				for (j = 0; j < roomWidth; j++) {
+					terrain[s + j] = 0;
+				}
 			}
-			else {
+			r += (rand.nextInt(roomWidth) + (width * rand.nextInt(roomHeight)));
+			h = r;
+			s = (10 + rand.nextInt(10)) * ((rand.nextInt(2) * 2) - 1);
+			j = s;
+			if (((r % width) + s) >= width) {
+				j = ((width - (r % width)) - 1);
+			}
+			if (((r % width) + s) < 0) {
+				j = r % width;
+			}
+			s = (j < 0) ? (-1) : 1;
+			j += r;
+			for (; h != j; h += s) {
+				terrain[h] = 0;
+			}
+			h = r;
+			s = (10 + rand.nextInt(10)) * ((rand.nextInt(2) * 2) - 1);
+			j = s;
+			if (((r / width) + s) >= height) {
+				j = (height - (r / width)) - 1;
+			}
+			if (((r / width) + s) < 0) {
+				j = r / width;
+			}
+			s = (j < 0) ? (-1) : 1;
+			j = (r + (j * width));
+			for (; h != j; h += (s * width)) {
+				terrain[h] = 0;
+			}
+		}
+		for (r = 0; r < width; r++) {
+			terrain[r] = 0;
+		}
+		for (r = 0; r < terrain.length; r += width) {
+			terrain[r] = 0;
+		}
+		for (r = (terrain.length - width); r < terrain.length; r++) {
+			terrain[r] = 0;
+		}
+		for (r = (width - 1); r < terrain.length; r+= width) {
+			terrain[r] = 0;
+		}
+		int ePlace = 0;
+		for (i = 0; i < terrain.length; i++) {
+			if (terrain[i] != 1){
+				r = rand.nextInt();
 				switch (r & 0xf) {
 					case (0):
 					case (1):
@@ -160,6 +216,6 @@ public class Level {
 				}
 			}
 		}
-		return new Level(new FixedFrame(width, height, terrain), entities, ent, 0L, Server.version, 0, 0);
+		return new Level(new FixedFrame(width, height, terrain), entities, ent, 0L, Server.version, spawnX, spawnY);
 	}
 }
