@@ -278,6 +278,10 @@ class Auth {
      * @param {NSocket} socket
      */
     async updateSecretConnection (socket) {
+        function failed (nb) {
+            socket.write(0x55);
+            socket.end();
+        }
         const usingID = socket.refid;
         // console.log("X");
         const SID = await socket.read(8);
@@ -299,7 +303,7 @@ class Auth {
             return;
         }
         socket.write(0x63);
-        const exp = publicKey.export({type:"pkcs1", format:"der"});
+        const exp = publicKey.export({type:"pkcs1", format:"pem"});
         socket.write([(exp.length & 0xff00) >> 8, exp.length & 0xff]);
         socket.write(exp);
         buf = await socket.read(2);

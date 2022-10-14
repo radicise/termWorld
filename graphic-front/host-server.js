@@ -326,7 +326,7 @@ class Host {
                         sock.write([0x33, ...serverID]);
                         if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: auth server did not recognize server ID"); fail++; return res(sock.end());}
                         const nonce0 = await sock.read(32);
-                        sock.write(hash(Buffer.concat([Buffer.from(hash(Buffer.concat([stringToBuffer(serverPassword), Buffer.from(serverID)]))), Buffer.from(nonce0)])));
+                        sock.write(hash(Buffer.concat([Buffer.from(hash(Buffer.concat([stringToBuffer(serverPassword, false, 32, 0x20), Buffer.from(serverID)]))), Buffer.from(nonce0)])));
                         if ((await sock.read(1))[0] === 0x55) {bundle.mkLog("failed: invalid server password"); fail++; return res(sock.end());}
                         let buf = await sock.read(2);
                         buf = await sock.read((buf[0] << 8) | buf[1]);
