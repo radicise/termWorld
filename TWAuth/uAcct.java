@@ -23,6 +23,9 @@ class uAcct {
 		this.uname = uname;
 		this.UID = UID;
 	}
+	uAcct(long UID) {
+		this.UID = UID;
+	}
 	static uAcct[] fromStream() throws Exception {
 		int i = Auth.in.readInt();
 		uAcct[] result = new uAcct[i];

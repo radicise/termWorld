@@ -19,6 +19,9 @@ class sAcct {
 		this.SID = SID;
 		pass = pw;
 	}
+	sAcct(long SID) {
+		this.SID = SID;
+	}
 	static sAcct[] fromStream() throws Exception {
 		int i = Auth.in.readInt();
 		sAcct[] result = new sAcct[i];

@@ -3,6 +3,6 @@
 # `client.jar' must be launched with different arguments in order to use a different login or different authentication or multiplayer servers
 HBNDFMPMHPGNIIOM=$(stty -g)
 stty -echo -icanon
-java -jar ./client.jar guest password 0000000000000005 127.0.0.1:15651 127.0.0.1:15652
+java termWorld/Client guest password 0000000000000005 127.0.0.1:15651 127.0.0.1:15652
 stty $HBNDFMPMHPGNIIOM
 unset HBNDFMPMHPGNIIOM
