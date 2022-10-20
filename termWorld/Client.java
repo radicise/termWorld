@@ -341,6 +341,9 @@ public class Client {
 				Text.buffered.write('[');
 				Text.buffered.write(Text.tiles[Server.level.terrain.tiles[(Server.level.ent[EID].y * Server.level.terrain.width) + Server.level.ent[EID].x]]);
 				Text.buffered.write(']');
+				Text.buffered.write('<');
+				Text.buffered.write(Short.toString(cooldown));
+				Text.buffered.write('>');
 				Text.buffered.write('{');
 				for (int p = 0; p < (Server.level.ent[EID].inventory.length - 1); p++) {
 					if (Server.level.ent[EID].inventory[p] == null) {
@@ -362,9 +365,6 @@ public class Client {
 					Text.buffered.write(Integer.toString(Server.level.ent[EID].inventory[Server.level.ent[EID].inventory.length - 1].quantity));
 				}
 				Text.buffered.write('}');
-				Text.buffered.write('<');
-				Text.buffered.write(Short.toString(cooldown));
-				Text.buffered.write('>');
 				Text.buffered.write('(');
 				Text.buffered.write(Integer.toString(Server.level.ent[EID].x));
 				Text.buffered.write(',');
