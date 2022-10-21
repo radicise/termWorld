@@ -136,7 +136,7 @@ public class Server {
 		synchronized (ConnectedPlayer.secret) {
 			System.arraycopy(newSalt, 0, ConnectedPlayer.secret, 0, 32);
 		}
-		for (int i = 0; i < authsPorts.length; i++) {
+		for (int i = 0; i < authsPorts.length;) {
 			throw new Exception("Not yet implemented");
 		}
 	}

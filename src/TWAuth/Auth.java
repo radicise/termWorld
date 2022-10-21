@@ -40,7 +40,7 @@ import java.io.FileOutputStream;
 		out.flush();
 		out.close();
 		System.exit(0);
-		/**/in = new DataInputStream(new FileInputStream(new File("./TWAuth/TWAuth")));
+		/**/in = new DataInputStream(new FileInputStream(new File("TWAuth")));
 		uAcct.nextUID = in.readLong();
 		sAcct.nextSID = in.readLong();
 		users = Arrays.asList(uAcct.fromStream());

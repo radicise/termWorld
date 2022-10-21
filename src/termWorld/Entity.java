@@ -2,7 +2,7 @@ package termWorld;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InvalidObjectException;
-public class Entity {
+public abstract class Entity {
 	public int x;
 	public int y;
 	public short health;
@@ -38,7 +38,7 @@ public class Entity {
 		dataOut.writeShort(health);
 	}
 	static Entity fromDataStream(DataInputStream readFrom) throws Exception {
-		return new Entity(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort());
+		return null;
 	}
 	static Entity deserialize(DataInputStream strm) throws Exception {
 		switch (strm.read()) {
