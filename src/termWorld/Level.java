@@ -110,6 +110,11 @@ public class Level {
 		}
 		Text.buffered.write(Text.delimiter);
 	}
+	public int explosion(int x, int y, int size) {
+		// TODO implement removal of tiles and damage to entities
+		// TODO calculate point value of destruction and harm and return it
+		return -1;
+	}
 	public synchronized int nextSlot() throws Exception {
 		start = entPlace;
 		while (ent[entPlace] != null) {
@@ -121,7 +126,7 @@ public class Level {
 				throw new Exception("Could not allocate Entity slot");
 			}
 		}
-		ent[entPlace] = new Entity(0, 0, 0L, (short) 0);
+		ent[entPlace] = new Placeholder(0, 0, 0L, (short) 0);
 		return entPlace;
 	}
 	public static Level generate(int width, int height, long seed) {

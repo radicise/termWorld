@@ -124,7 +124,7 @@ import java.io.FileOutputStream;
 		for (int i = 0; i < 8; i++) {
 			toh[103 - i] = (byte) (UID >>> (i * 8));
 		}
-		uOut.write(shs.digest(toh));//Hope that time machines don't and won't exist
+		uOut.write(shs.digest(toh));// Hope that time machines don't and won't exist
 		return true;
 	}
 	static boolean updateSecret(Socket sock) throws Exception {

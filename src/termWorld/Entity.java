@@ -52,6 +52,10 @@ public abstract class Entity {
 				return EntityItem.fromDataStream(strm);
 			case (4)://reserved for plugin Entity-subclass objects
 				return null;//a null return value signifies that the entity should be ignored
+			case (5):
+				return Explosive.fromDataStream(strm);
+			case (6):
+				return null;// Placeholder entity
 			default:
 				throw new InvalidObjectException("Invalid Entity type");
 		}
@@ -175,5 +179,9 @@ public abstract class Entity {
 		xO = x;
 		yO = y;
 		return true;
+	}
+	void sendFace(char face) {
+		Server.buf.put((byte) 1).putInt(x).putInt(y).putChar(face);
+		this.face = face;
 	}
 }

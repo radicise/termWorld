@@ -35,7 +35,7 @@ class Dog extends Entity {
 			color = 9;
 		}
 	}
-	void serialize(DataOutputStream dataOut) throws Exception {//TODO Include face value
+	void serialize(DataOutputStream dataOut) throws Exception {
 		dataOut.write(type);
 		dataOut.writeInt(inventory.length);
 		for (Item I : inventory) {
@@ -49,13 +49,16 @@ class Dog extends Entity {
 		dataOut.writeInt(y);
 		dataOut.writeLong(data);
 		dataOut.writeShort(health);
+		dataOut.writeChar(face);
 	}
 	static Dog fromDataStream(DataInputStream readFrom) throws Exception {
 		Item[] inv = new Item[readFrom.readInt()];
 		for (int n = 0; n < inv.length; n++) {
 			inv[n] = Item.deserialize(readFrom);
 		}
-		return new Dog(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort(), inv);
+		Dog d = new Dog(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort(), inv);
+		d.face = readFrom.readChar();
+		return d;
 	}
 	protected void animate(int EID) throws Exception {
 		if (checkDeath(EID)) {
@@ -75,7 +78,7 @@ class Dog extends Entity {
 		if (((((Server.level.age ^ data) & 0xf) == 0) && (this.health < 10)) && (this.health > -30000)) {
 			health++;
 			face = 'D';
-			Server.buf.put((byte) 1).putInt(x).putInt(y).putChar(face);
+			sendFace(face);
 			healed = true;
 			
 		}
