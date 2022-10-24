@@ -3,11 +3,20 @@ import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.KeyPair;
 import java.security.MessageDigest;
+import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
+
+import TWCommon.Sec;
+
+import javax.crypto.Cipher;
 class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	BufferedOutputStream out;
 	InputStream in;
@@ -22,7 +31,64 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	private int h;
 	static private byte[] superSecret = new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0};//Arbitrary random value used for seeding of the authentication nonce generator
 	static byte[] secret = new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0};//Arbitrary random value used for authentication
+	private static byte[] password = new byte[32];
 	static private SecureRandom nonceGen;
+	public static boolean updateSecret() throws Exception {
+		byte[] nsec = new byte[32];
+		nonceGen.nextBytes(nsec);
+		int authcount = Server.authsIPv4.length;
+		for (int ai = 0; ai < authcount; ai ++) {
+			Socket sock = new Socket(InetAddress.getByAddress(Server.authsIPv4[ai]), Server.authsPorts[ai]);
+			DataInputStream dIn = new DataInputStream(sock.getInputStream());
+			DataOutputStream dOut = new DataOutputStream(sock.getOutputStream());
+			dOut.write(0x33);
+			dOut.writeLong(Server.GUSID);
+			if (dIn.read() == 0x55) {
+				sock.close();
+				continue;
+			}
+			byte[] nonce0 = new byte[32];
+			dIn.read(nonce0);
+			MessageDigest hasher = MessageDigest.getInstance("SHA-256");
+			hasher.update(password);
+			hasher.update(nonce0);
+			dOut.write(hasher.digest());
+			if (dIn.read() == 0x55) {
+				sock.close();
+				continue;
+			}
+			int keylen = dIn.read();
+			byte[] pubkeybytes = new byte[keylen];
+			dIn.read(pubkeybytes);
+			PublicKey pubkey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(pubkeybytes));
+			Cipher encryptor = Cipher.getInstance("RSA");
+			encryptor.init(Cipher.ENCRYPT_MODE, pubkey);
+			byte[] enc = encryptor.doFinal(nsec);
+			dOut.writeInt(enc.length);
+			dOut.write(enc);
+		}
+		secret = nsec;
+		return true;
+	}
+	private void manLoop() throws Exception {
+		DataInputStream dIn = new DataInputStream(socket.getInputStream());
+		DataOutputStream dOut = new DataOutputStream(socket.getOutputStream());
+		KeyPair kp = Sec.kg.genKeyPair();
+		byte[] epubk = kp.getPublic().getEncoded();
+		dOut.write(epubk.length);
+		dOut.write(epubk);
+		byte[] encpass = new byte[dIn.readInt()];
+		dIn.read(encpass);
+		byte[] decpass = Sec.RSADecrypt(kp.getPrivate(), encpass);
+		if (!Arrays.equals(password, decpass)) {
+			dOut.write(0x55);
+			return;
+		}
+		dOut.write(0x63);
+		while (true) {
+			//
+		}
+	}
 	ConnectedPlayer(Socket socket) throws Exception {
 		this.socket = socket;
 		this.out = new BufferedOutputStream(socket.getOutputStream());
@@ -33,6 +99,10 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		}
 		if (h == 0x63) {
 			EID = Server.level.nextSlot();
+		}
+		if (h == 0x01) {
+			manLoop();
+			return;
 		}
 		synchronized(Server.playerVal) {
 			SUID = Server.playerVal;

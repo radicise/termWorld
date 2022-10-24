@@ -45,6 +45,7 @@ import java.io.FileOutputStream;
 		sAcct.nextSID = in.readLong();
 		users = Arrays.asList(uAcct.fromStream());
 		servers = Arrays.asList(sAcct.fromStream());
+		System.out.println(servers);
 		in.close();
 		byte[] seed = new byte[verySecret.length + 8];
 		System.arraycopy(verySecret, 0, seed, 0, verySecret.length);
@@ -53,7 +54,9 @@ import java.io.FileOutputStream;
 			seed[seed.length - 1 - i] = (byte) (thenTime >>> (i * 8));
 		}
 		rand = new SecureRandom(seed);
-		KeyPair genpair = KeyPairGenerator.getInstance("RSA").genKeyPair();
+		KeyPairGenerator kg = KeyPairGenerator.getInstance("RSA");
+		kg.initialize(1024);
+		KeyPair genpair = kg.genKeyPair();
 		mPubKey = genpair.getPublic();
 		mPrivKey = genpair.getPrivate();
 		try (ServerSocket serv = new ServerSocket(port)) {
@@ -131,6 +134,8 @@ import java.io.FileOutputStream;
 		InputStream sIn = sock.getInputStream();
 		DataInputStream dIn = new DataInputStream(sIn);
 		long SID = dIn.readLong();
+		System.out.print("updating secret for: ");
+		System.out.println(SID);
 		int ind = 0;
 		OutputStream sOut = sock.getOutputStream();
 		sAcct cmr;
@@ -162,7 +167,7 @@ import java.io.FileOutputStream;
 		byte[] enc = mPubKey.getEncoded();
 		sOut.write(enc.length);
 		sOut.write(enc);
-		short elen = dIn.readShort();
+		int elen = dIn.readInt();
 		byte[] eup = new byte[elen];
 		dIn.read(eup);
 		Cipher decCipher = Cipher.getInstance("RSA");
@@ -178,6 +183,7 @@ import java.io.FileOutputStream;
 			servers.set(ind, cmr);
 		}
 		sOut.write(0x63);
+		System.out.println("updated secret key: " + cmr);
 		return true;
 	}
 	static void serve(Socket sock) {
@@ -201,6 +207,7 @@ import java.io.FileOutputStream;
         		}
         		catch (Exception E) {
         			System.out.println("An Exception has occurred in handling the remote request: " + E);
+					E.printStackTrace();
         		}
         	}
         }).start();

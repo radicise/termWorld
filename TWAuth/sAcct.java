@@ -1,4 +1,8 @@
 package TWAuth;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
 class sAcct {
 	byte[] ipv4;
 	byte[] sName;
@@ -6,6 +10,23 @@ class sAcct {
 	byte[] pass;
 	long SID;
 	static Long nextSID;
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append(new String(sName, StandardCharsets.UTF_16BE));
+		sb.append('\n');
+		sb.append(Arrays.toString(secret));
+		// for (byte b : secret) {
+		// 	System.out.print(b);
+		// 	sb.append((int) b);
+		// }
+		// System.out.println();
+		sb.append('\n');
+		sb.append(Arrays.toString(pass));
+		// for (byte b : pass) {
+		// 	sb.append(String.valueOf(b));
+		// }
+		return sb.toString();
+	}
 	public boolean equals(Object against) {
 		if (against == null) {
 			return false;

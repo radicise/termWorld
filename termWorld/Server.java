@@ -77,6 +77,7 @@ public class Server {
 		System.out.println("Plugins loaded: " + n);
 		bstr = new DataOutputStream(new termWorld.ByteBufferOutputStream(buf));
 		ConnectedPlayer.initRandom();
+		ConnectedPlayer.updateSecret();
 		ServerSocket server = new ServerSocket(port);
 		Timer intervallic = new Timer();
 		intervallic.schedule(new TimerTask() {
