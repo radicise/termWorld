@@ -40,7 +40,7 @@ import java.io.FileOutputStream;
 		out.flush();
 		out.close();
 		System.exit(0);
-		/**/in = new DataInputStream(new FileInputStream(new File("./TWAuth/TWAuth")));
+		/**/in = new DataInputStream(new FileInputStream(new File("TWAuth")));
 		uAcct.nextUID = in.readLong();
 		sAcct.nextSID = in.readLong();
 		users = Arrays.asList(uAcct.fromStream());
@@ -127,7 +127,7 @@ import java.io.FileOutputStream;
 		for (int i = 0; i < 8; i++) {
 			toh[103 - i] = (byte) (UID >>> (i * 8));
 		}
-		uOut.write(shs.digest(toh));//Hope that time machines don't and won't exist
+		uOut.write(shs.digest(toh));// Hope that time machines don't and won't exist
 		return true;
 	}
 	static boolean updateSecret(Socket sock) throws Exception {

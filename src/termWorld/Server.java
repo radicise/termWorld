@@ -25,7 +25,7 @@ public class Server {
 	public static ArrayList<Method> plugs = new ArrayList<Method>();
 	public static short turnInterval = 189;
 	static ArrayList<ConnectedPlayer> players = new ArrayList<ConnectedPlayer>();
-	static Long playerVal = 0L;
+	static Long playerVal = new Long(0L);
 	static ByteBuffer buf = ByteBuffer.allocate(4096).order(ByteOrder.BIG_ENDIAN);
 	static DataOutputStream bstr;
 	static byte[] bufBytes = buf.array();
@@ -137,7 +137,7 @@ public class Server {
 		synchronized (ConnectedPlayer.secret) {
 			System.arraycopy(newSalt, 0, ConnectedPlayer.secret, 0, 32);
 		}
-		for (int i = 0; i < authsPorts.length; i++) {
+		for (int i = 0; i < authsPorts.length;) {
 			throw new Exception("Not yet implemented");
 		}
 	}
