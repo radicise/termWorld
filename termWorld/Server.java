@@ -4,6 +4,8 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.util.TreeMap;
 */import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -30,6 +32,10 @@ public class Server {
 	static DataOutputStream bstr;
 	static byte[] bufBytes = buf.array();
 	static long GUSID = 1;//Server ID
+	static void stop() throws Exception {
+		DataOutputStream dOut = new DataOutputStream(new FileOutputStream(new File("TWLevelDat")));
+		level.serialize(dOut);
+	}
 	public static void main(String[] arg) throws Exception {
 		{
 			String[] aut;

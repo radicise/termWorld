@@ -10,26 +10,41 @@ import javax.crypto.Cipher;
 import java.lang.IllegalArgumentException;
 
 public class Sec {
-    private static byte[] key = new byte[32];
-    private static int keypos = 0;
+    private byte[] key = new byte[32];
+    private int keypos = 0;
     public static KeyPairGenerator kg;
     public static SecureRandom rand;
-    private static void regenerate_key() throws Exception {
+    private static boolean inited = false;
+    public Sec(byte[] key) {
+        this.key = key;
+    }
+    public void set_key(byte[] nkey) {
+        key = nkey;
+        keypos = 0;
+    }
+    private void regenerate_key() throws Exception {
         keypos = 0;
         key = hash(key);
     }
-    public static byte[] crypt(byte[] data) throws Exception {
+    public byte[] crypt(byte[] data) throws Exception {
         byte[] output = new byte[data.length];
         for (int i = 0; i < data.length; i ++) {
             if (keypos >= 32) {
                 regenerate_key();
             }
-            for (int j = 0; j < 8; j ++) {
-                output[i] = (byte) (output[i] | ((data[i] & (1 << j)) ^ (key[keypos] & (1 << j))));
-            }
+            output[i] = (byte) (output[i] | (data[i] ^ key[keypos]));
             keypos ++;
         }
         return output;
+    }
+    public byte crypt(byte data) throws Exception {
+        if (keypos >= 32) {
+            regenerate_key();
+        }
+        return (byte) (data ^ key[keypos]);
+    }
+    public byte crypt(int data) throws Exception {
+        return crypt((byte) data);
     }
     public static byte[] hash(byte[] data) throws Exception {
         MessageDigest hasher = MessageDigest.getInstance("SHA-256");
@@ -81,11 +96,14 @@ public class Sec {
         return f;
     }
     public static void init() {
+        if (inited) {return;}
+        inited = true;
         try {
             kg = KeyPairGenerator.getInstance("RSA");
+            // rand = new SecureRandom();
             rand = new SecureRandom(longToBytes(System.nanoTime(), 8));
         } catch (Exception _E) {}
-        kg.initialize(1024);
+        kg.initialize(4096);
     }
     public static byte[] RSAEncrypt(PublicKey pk, byte[] data) throws Exception {
         Cipher c = Cipher.getInstance("RSA");

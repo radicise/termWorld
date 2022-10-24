@@ -33,9 +33,11 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	static byte[] secret = new byte[]{0x58, (byte) 0xe0, (byte) 0xd3, 0x14, 0x41, (byte) 0xd0, (byte) 0xe6, 0x6e, (byte) 0x8b, (byte) 0xa4, (byte) 0xf1, (byte) 0xd3, 0x4b, (byte) 0xc6, 0x46, 0x76, 0x10, (byte) 0xa7, 0x2f, 0x22, (byte) 0xbd, 0x04, 0x53, 0x2b, (byte) 0xf1, (byte) 0x8f, 0x0b, (byte) 0xb3, 0x35, (byte) 0xac, 0x72, (byte) 0xb0};//Arbitrary random value used for authentication
 	private static byte[] password = new byte[32];
 	static private SecureRandom nonceGen;
-	public static boolean updateSecret() throws Exception {
+	public static int updateSecret() throws Exception {
 		byte[] nsec = new byte[32];
 		nonceGen.nextBytes(nsec);
+		short good = 0;
+		short fail = 0;
 		int authcount = Server.authsIPv4.length;
 		for (int ai = 0; ai < authcount; ai ++) {
 			Socket sock = new Socket(InetAddress.getByAddress(Server.authsIPv4[ai]), Server.authsPorts[ai]);
@@ -45,6 +47,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			dOut.writeLong(Server.GUSID);
 			if (dIn.read() == 0x55) {
 				sock.close();
+				fail ++;
 				continue;
 			}
 			byte[] nonce0 = new byte[32];
@@ -55,6 +58,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			dOut.write(hasher.digest());
 			if (dIn.read() == 0x55) {
 				sock.close();
+				fail ++;
 				continue;
 			}
 			int keylen = dIn.read();
@@ -66,27 +70,57 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			byte[] enc = encryptor.doFinal(nsec);
 			dOut.writeInt(enc.length);
 			dOut.write(enc);
+			good ++;
 		}
 		secret = nsec;
-		return true;
+		return (((int) good) << 16) | ((int) fail);
 	}
 	private void manLoop() throws Exception {
 		DataInputStream dIn = new DataInputStream(socket.getInputStream());
 		DataOutputStream dOut = new DataOutputStream(socket.getOutputStream());
 		KeyPair kp = Sec.kg.genKeyPair();
 		byte[] epubk = kp.getPublic().getEncoded();
-		dOut.write(epubk.length);
+		dOut.writeInt(epubk.length);
 		dOut.write(epubk);
 		byte[] encpass = new byte[dIn.readInt()];
 		dIn.read(encpass);
 		byte[] decpass = Sec.RSADecrypt(kp.getPrivate(), encpass);
 		if (!Arrays.equals(password, decpass)) {
-			dOut.write(0x55);
+			dOut.writeInt(0x55);
 			return;
 		}
-		dOut.write(0x63);
+		dOut.writeInt(0x63);
+		byte[] cmkbyt = new byte[dIn.readInt()];
+		dIn.read(cmkbyt);
+		PublicKey cmkpub = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(cmkbyt));
+		byte[] symkey = new byte[32];
+		Sec.rand.nextBytes(symkey);
+		byte[] esym = Sec.RSAEncrypt(cmkpub, symkey);
+		dOut.writeInt(esym.length);
+		dOut.write(esym);
+		Sec cry = new Sec(symkey);
 		while (true) {
-			//
+			int opid = cry.crypt((byte) dIn.readInt());
+			switch (opid) {
+				case 0x00:
+					socket.close();
+					return;
+				case 0x01:
+					dIn.readByte();
+					dOut.write(cry.crypt(0x55));
+					break;
+				case 0x02:
+					int success = ConnectedPlayer.updateSecret();
+					dOut.writeShort((success & (0xffff << 16)) >> 16);
+					dOut.writeShort(success & 0xffff);
+					break;
+				case 0x04:
+					Server.stop();
+					break;
+				default:
+					dOut.write(cry.crypt(0x55));
+					break;
+			}
 		}
 	}
 	ConnectedPlayer(Socket socket) throws Exception {
@@ -101,7 +135,6 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			EID = Server.level.nextSlot();
 		}
 		if (h == 0x01) {
-			manLoop();
 			return;
 		}
 		synchronized(Server.playerVal) {
@@ -132,12 +165,16 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			if (h == 0x63) {
 				serve();
 			}
+			else if (h == 0x01) {
+				manLoop();
+			}
 			else {
 				throw new Exception("Not yet implemented");
 			}
 		}
 		catch (Exception E) {
 			System.out.println("An Exception has occurred: " + E);
+			E.printStackTrace();
 			try {
 				socket.close();
 			}
@@ -296,6 +333,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		if (genInit) {
 			throw new Exception("Reinitialization of the authentication nonce generator is not permitted");
 		}
+		Sec.init();
 		byte[] seed = new byte[superSecret.length + 8];
 		System.arraycopy(superSecret, 0, seed, 0, superSecret.length);
 		long thenTime = System.currentTimeMillis();

@@ -54,7 +54,10 @@ FOR HOSTS {
         } else {
             Host -> Client: 0x55
         }
-        Host -> Client: <number succeeded> + <number failed> (numbers are 1 byte signed ints)
+        Host -> Client: <number succeeded> + <number failed> (numbers are 2 byte signed ints)
+    }
+    if (opid == 0x04) {
+        execute ( <host-shutdown> )
     }
 }
 
