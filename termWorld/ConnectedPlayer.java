@@ -310,12 +310,17 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		return;
 	}
 	void kick(String message) throws Exception {
-		alive = false;
-		Server.level.ent[EID].data = -1;
-		synchronized(Server.players) {
-			Server.players.remove(this);
+		kick(message, false);
+	}
+	void kick(String message, boolean suppress) throws Exception {
+		if (!suppress) {
+			alive = false;
+			Server.level.ent[EID].data = -1;
+			synchronized(Server.players) {
+				Server.players.remove(this);
+			}
+			Thread.sleep(500);
 		}
-		Thread.sleep(500);
 		try {
 			out.write(3);
 			byte[] mB = message.getBytes("UTF-8");

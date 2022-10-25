@@ -255,7 +255,7 @@ public class Client {
 		right = false;
 		placed = false;
 		destroyed = false;
-		cooldown = new Short((short) 0);
+		cooldown = (short) 0;
 		try {
 			new Thread() {
 				public void run() {

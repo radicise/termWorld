@@ -27,14 +27,36 @@ public class Server {
 	public static ArrayList<Method> plugs = new ArrayList<Method>();
 	public static short turnInterval = 189;
 	static ArrayList<ConnectedPlayer> players = new ArrayList<ConnectedPlayer>();
-	static Long playerVal = new Long(0L);
+	static Long playerVal = 0L;
 	static ByteBuffer buf = ByteBuffer.allocate(4096).order(ByteOrder.BIG_ENDIAN);
 	static DataOutputStream bstr;
 	static byte[] bufBytes = buf.array();
 	static long GUSID = 1;//Server ID
-	static void stop() throws Exception {
-		DataOutputStream dOut = new DataOutputStream(new FileOutputStream(new File("TWLevelDat")));
-		level.serialize(dOut);
+	private static Timer intervallic;
+	private static boolean running = true;
+	public static void stop() {
+		running = false;
+		intervallic.cancel();
+		try {
+			DataOutputStream dOut = new DataOutputStream(new FileOutputStream(new File("TWLevelDat")));
+			level.serialize(dOut);
+		} catch (Exception E) {
+			System.out.println("ERROR SAVING LEVEL DATA: " + E);
+			E.printStackTrace();
+		}
+		synchronized (players) {
+			for (int i = 0; i < players.size(); i ++) {
+				ConnectedPlayer player = players.get(i);
+				try {
+					player.kick("SERVER SHUTDOWN", true);
+				} catch (Exception E) {
+					System.out.println(String.format("ERROR LOGGING OUT PLAYER %s: %o", player.username, E));
+					E.printStackTrace();
+				}
+			}
+		}
+		System.out.println("CLEAN SHUTDOWN");
+		System.exit(0);
 	}
 	public static void main(String[] arg) throws Exception {
 		{
@@ -85,9 +107,10 @@ public class Server {
 		ConnectedPlayer.initRandom();
 		ConnectedPlayer.updateSecret();
 		ServerSocket server = new ServerSocket(port);
-		Timer intervallic = new Timer();
+		intervallic = new Timer();
 		intervallic.schedule(new TimerTask() {
 			public void run() {
+				if (!running) {return;}
 				if (Locker.tryLock()) {
 					try {
 						int n = 0;
@@ -128,7 +151,7 @@ public class Server {
 				}
 			}
 		}, 0, turnInterval);
-		while (true) {
+		while (running) {
 			try {
 				(new Thread(new ConnectedPlayer(server.accept()))).start();
 			}
