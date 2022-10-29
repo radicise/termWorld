@@ -69,6 +69,7 @@ import java.io.FileOutputStream;
 		}
 	}
 	static boolean authenticateClient(Socket sock) throws Exception {
+		System.out.println("AUTHENTICATING CLIENT");
 		InputStream uIn = sock.getInputStream();
 		DataInputStream dIn = new DataInputStream(uIn);
 		long UID = dIn.readLong();

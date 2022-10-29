@@ -2,6 +2,9 @@ package termWorld;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InvalidObjectException;
+import java.util.Arrays;
+
+import TWCommon.Text;
 public abstract class Entity {
 	public int x;
 	public int y;
@@ -28,6 +31,7 @@ public abstract class Entity {
 		color = 16;
 	}
 	void serialize(DataOutputStream dataOut) throws Exception {//TODO Include face value
+		System.out.println("type " + type);
 		dataOut.write(type);
 		if (type == 4) {//Supports plugin Entity-subclass objects without making serialization implementation a compulsory and redundant thing for the plugin
 			return;
@@ -37,11 +41,17 @@ public abstract class Entity {
 		dataOut.writeLong(data);
 		dataOut.writeShort(health);
 	}
+	public void toPlayerStream(DataOutputStream strm) throws Exception {
+		strm.writeChars(new String(Text.colors[color]));
+		strm.writeChar(face);
+	}
 	static Entity fromDataStream(DataInputStream readFrom) throws Exception {
 		return null;
 	}
 	static Entity deserialize(DataInputStream strm) throws Exception {
-		switch (strm.read()) {
+		int etype = strm.read();
+		// System.out.println("type " + etype);
+		switch (etype) {
 			case (0):
 				return Entity.fromDataStream(strm);
 			case (1):
@@ -57,7 +67,8 @@ public abstract class Entity {
 			case (6):
 				return null;// Placeholder entity
 			default:
-				throw new InvalidObjectException("Invalid Entity type");
+				System.out.println(Arrays.toString(strm.readNBytes(25)));
+				throw new InvalidObjectException("Invalid Entity type: " + etype);
 		}
 	}
 	boolean checkDeath(int EID) {
@@ -110,7 +121,15 @@ public abstract class Entity {
 		}
 		return g;
 	}
-	boolean moveBy(int Dx, int Dy, int d) throws Exception {//Only use when Server.buf is safe to write to, don't move by anything that would move the player out of the bounds of int values if not corrected
+	void onMove() throws Exception {}
+	boolean moveBy(int Dx, int Dy, int d) throws Exception {
+		if (_moveBy(Dx, Dy, d)) {
+			onMove();
+			return true;
+		}
+		return false;
+	}
+	private boolean _moveBy(int Dx, int Dy, int d) throws Exception {//Only use when Server.buf is safe to write to, don't move by anything that would move the player out of the bounds of int values if not corrected
 		if (d > 15) {
 			return false;
 		}

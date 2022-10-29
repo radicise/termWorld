@@ -1,10 +1,13 @@
 package termWorld;
+import java.io.DataInputStream;
 /*import java.io.FileOutputStream;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.util.TreeMap;
-*/import java.io.DataOutputStream;
+*/
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
@@ -14,12 +17,10 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.locks.ReentrantLock;
 import java.lang.reflect.Method;
+import TWCommon.Globals;
 public class Server {
 	static ReentrantLock Locker = new ReentrantLock();
-	public static final int version = 2;
-	public static final String versionString = "0.0.2";
-	public static final int defaultPort = 15651;
-	public static int port = defaultPort;
+	public static int port = Globals.defaultHostPort;
 	static byte[][] authsIPv4;
 	static int[] authsPorts;
 	public static volatile String levelname = "defaultLevel";
@@ -33,13 +34,15 @@ public class Server {
 	static byte[] bufBytes = buf.array();
 	static long GUSID = 1;//Server ID
 	private static Timer intervallic;
-	private static boolean running = true;
+	public static boolean running = true;
 	public static void stop() {
 		running = false;
 		intervallic.cancel();
 		try {
-			DataOutputStream dOut = new DataOutputStream(new FileOutputStream(new File("TWLevelDat")));
-			level.serialize(dOut);
+			FileOutputStream fOut = new FileOutputStream(new File("TWLevelDat"), false);
+			DataOutputStream dOut = new DataOutputStream(fOut);
+			level.zip(dOut);
+			fOut.close();
 		} catch (Exception E) {
 			System.out.println("ERROR SAVING LEVEL DATA: " + E);
 			E.printStackTrace();
@@ -88,8 +91,25 @@ public class Server {
 		fileOut.close();
 		System.exit(0);
 		/**/try {
+			boolean saved = true;
 			/*level = Level.fromBytes(Files.readAllBytes(FileSystems.getDefault().getPath(levelname)));/**/
-			level = Level.generate(40, 40, 3827L);
+			try {
+				File f = new File("TWLevelDat");
+				FileInputStream fis = new FileInputStream(f);
+				try {
+					level = Level.unzip(new DataInputStream(fis));
+				} catch (Exception E) {
+					System.out.println("COULD NOT UNZIP LEVEL");
+					E.printStackTrace();
+				}
+				saved = false;
+				fis.close();
+			} catch (Exception E) {
+				System.out.println("LEVEL NOT STORED");
+			}
+			if (saved) {
+				level = Level.generate(40, 40, 3827L);
+			}
 		}
 		catch (Exception E) {
 			System.out.println("An Exception has occurred: " + E);
@@ -147,7 +167,7 @@ public class Server {
 					Locker.unlock();
 				}
 				else {
-					System.out.println("Animation interval lost!");
+					// System.out.println("Animation interval lost!");
 				}
 			}
 		}, 0, turnInterval);

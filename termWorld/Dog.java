@@ -57,6 +57,7 @@ class Dog extends Entity {
 			inv[n] = Item.deserialize(readFrom);
 		}
 		Dog d = new Dog(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort(), inv);
+		System.out.println("dog x: " + d.x + " " + d.y);
 		d.face = readFrom.readChar();
 		return d;
 	}

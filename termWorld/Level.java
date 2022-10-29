@@ -4,6 +4,11 @@ import java.io.DataOutputStream;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.TreeMap;
+
+import TWCommon.Globals;
+import TWCommon.Text;
+
+import java.util.HashMap;
 public class Level {
 	public Entity[] ent;//read below
 	public FixedFrame terrain;
@@ -17,6 +22,7 @@ public class Level {
 	public TreeMap<Long, Integer> dispFaces;//TODO make addEntity(Entity) method, returns slot or -1 if the desired space is occupied
 	private int entPlace = 0;
 	private int start;
+	public HashMap<byte[], Entity> playerMap;
 	public Level(FixedFrame terrain, TreeMap<Long, Integer> entities, Entity[] ent, long age, int VID, int spawnX, int spawnY) {
 		this.terrain = terrain;
 		this.entities = entities;
@@ -26,9 +32,36 @@ public class Level {
 		this.ent = ent;
 		this.VID = VID;
 		dispFaces = new TreeMap<Long, Integer>();
+		playerMap = new HashMap<byte[], Entity>();
 		entities.forEach((Long L, Integer I) -> {
 			dispFaces.put((L >>> 32) ^ (L << 32), I);
 		});
+	}
+	public void zip(DataOutputStream strm) throws Exception {
+		serialize(strm);
+		strm.writeInt(playerMap.size());
+		for (byte[] pid : playerMap.keySet()) {
+			playerMap.get(pid).serialize(strm);
+		}
+	}
+	public static Level unzip(DataInputStream strm) throws Exception {
+		Level lvl = deserialize(strm);
+		// if (true) {
+		// throw new BreakPointException("AFTER LVL.DESERIALIZE");
+		// }
+		for (int i = 0; i < lvl.ent.length; i ++) {
+			if (lvl.ent[i] == null) {continue;}
+			if (lvl.ent[i].type != 2) {continue;}
+			lvl.ent[i] = null;
+		}
+		int pmSize = strm.readInt();
+		lvl.playerMap = new HashMap<>(pmSize);
+		for (int i = 0; i < pmSize; i ++) {
+			strm.read();
+			EntityPlayer ep = EntityPlayer.fromDataStream(strm);
+			lvl.playerMap.put(ep.playerID, ep);
+		}
+		return lvl;
 	}
 	public synchronized void serialize(DataOutputStream strm) throws Exception {
 		strm.writeInt(VID);
@@ -39,8 +72,12 @@ public class Level {
 		strm.writeLong(age);
 		strm.writeInt(spawnX);
 		strm.writeInt(spawnY);
+		byte[] x = new byte[10];
+		Arrays.fill(x, (byte) 0xee);
+		strm.write(x);
 		strm.writeInt(entities.size());
 		for (Integer I : entities.values()) {
+			System.out.println("type " + ent[I]);
 			ent[I].serialize(strm);
 		}
 	}
@@ -55,10 +92,20 @@ public class Level {
 		long age = strm.readLong();
 		int spawnX = strm.readInt();
 		int spawnY = strm.readInt();
+		strm.readNBytes(10);
 		TreeMap<Long, Integer> entities = new TreeMap<Long, Integer>();
 		int numEntities = strm.readInt();
+		// strm.mark(1000000);
 		for (int i = 0; i < numEntities; i++) {
-			ent[i] = Entity.deserialize(strm);
+			try {
+				ent[i] = Entity.deserialize(strm);
+			} catch (Exception E) {
+				// strm.reset();
+				// System.out.println(Arrays.toString(strm.readNBytes(Math.min(strm.available(), 100))));
+				System.out.println(Arrays.toString(ent));
+				throw E;
+			}
+			// strm.mark(1000000);
 			if (ent[i] == null) {
 				i--;
 				numEntities--;
@@ -128,6 +175,10 @@ public class Level {
 		}
 		ent[entPlace] = new Placeholder(0, 0, 0L, (short) 0);
 		return entPlace;
+	}
+	public void toPlayerStream(DataOutputStream strm) throws Exception {
+		strm.writeInt(terrain.width);
+		strm.writeInt(terrain.height);
 	}
 	public static Level generate(int width, int height, long seed) {
 		Random rand = new Random(seed);
@@ -221,6 +272,6 @@ public class Level {
 				}
 			}
 		}
-		return new Level(new FixedFrame(width, height, terrain), entities, ent, 0L, Server.version, spawnX, spawnY);
+		return new Level(new FixedFrame(width, height, terrain), entities, ent, 0L, Globals.version, spawnX, spawnY);
 	}
 }

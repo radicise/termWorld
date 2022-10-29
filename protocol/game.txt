@@ -36,7 +36,7 @@ Client -> Auth: <serverID> + <nonce0> + hash(<Hpassword> + <nonce1> + <userID>)
 Auth -> Client: 0x63 for acceptance, 0x55 for rejection due to the player's secret key not being verified
 Auth -> Client: 0x63 for acceptance, 0x55 for rejection due to the target server not being registered with the authentication server
 Auth -> Client: hash(<username> + <nonce0> + <server>.<currentSecret> + <userID>)
-Client -> Host: <username> + <userid> + <the hash that the server gave>
+Client -> Host: <username> + <userid> + <the hash that the server gave> + <follow-length> + <raw-auth-address-bytes>
 Host -> Client: 0x63 for acceptance, 0x55 for rejection
 
 After auth:

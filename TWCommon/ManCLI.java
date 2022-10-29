@@ -2,6 +2,8 @@ package TWCommon;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.net.Socket;
 import java.security.KeyFactory;
 import java.security.KeyPair;
@@ -12,6 +14,7 @@ import java.util.Arrays;
 public class ManCLI {
     private static final byte[] COMFIN = new byte[]{(byte) 'f', (byte) 'i', (byte) 'n'};
     private static final byte[] COMKIL = new byte[]{(byte) 'k', (byte) 'i', (byte) 'l'};
+    private static final char[] conv = new char[]{'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'};
     private static byte[] parsePassword(String raw) {
         byte[] pass = new byte[32];
         int l = raw.length();
@@ -27,8 +30,32 @@ public class ManCLI {
         return pass;
     }
     public static void main(String[] args) throws Exception {
-        if (args.length > 0 && args[0].equals("--help")) {
+        if (args.length == 0) {
+            System.out.println("ManCLI --help");
+            return;
+        }
+        if (args[0].equals("--help")) {
             System.out.println("\"ManCLI [hostaddr]:[hostport] -[ah] [password]\" where [hostaddr] is INetAddress, [hostport] is short, [password] is (String | 0x[--]{32})");
+            return;
+        }
+        if (args[0].equals("--dump")) {
+            if (args.length < 2) {
+                System.out.println("MUST PROVIDE DUMP TARGET");
+                return;
+            }
+            FileInputStream fis = new FileInputStream(new File(args[1]));
+            byte[] data = fis.readAllBytes();
+            fis.close();
+            int inc = 32;
+            for (int i = 0; i < data.length; i += inc) {
+                int j = i;
+                while (j < data.length && j < i + inc) {
+                    System.out.print(((Character) conv[(data[j] & 0xf0) >> 4]).toString() + conv[data[j] & 0xf] + " ");
+                    j += 1;
+                }
+                System.out.println();
+            }
+            System.out.println();
             return;
         }
         if (args.length < 3) {
@@ -64,7 +91,7 @@ public class ManCLI {
         dOut.write(pkeb);
         byte[] symkeybyt = new byte[dIn.readInt()];
         dIn.read(symkeybyt);
-        System.out.println(Arrays.toString(symkeybyt));
+        // System.out.println(Arrays.toString(symkeybyt));
         Sec cry = new Sec(Sec.RSADecrypt(kp.getPrivate(), symkeybyt));
         System.out.println("KEY EXCHANGE SUCCESS");
         while (true) {

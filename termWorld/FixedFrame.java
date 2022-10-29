@@ -1,4 +1,7 @@
 package termWorld;
+
+import TWCommon.Text;
+
 class FixedFrame {
 	int width;
 	int height;

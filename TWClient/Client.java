@@ -1,4 +1,4 @@
-package termWorld;
+package TWClient;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.InputStream;
@@ -8,6 +8,9 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
+
+import TWCommon.Globals;
+import TWCommon.Text;
 public class Client {
 	public static byte[] IPv4Host = new byte[]{127, 0, 0, 1};
 	public static byte[] authIPv4Host = new byte[]{127, 0, 0, 1};
@@ -106,9 +109,9 @@ public class Client {
 		}
 	}
 	public static void main(String[] arg) throws Exception {
-		System.out.println("termWorld v" + Server.versionString);
+		System.out.println("termWorld v" + Globals.versionString);
 		String[] ipD = arg[3].split(":");
-		Server.port = Integer.parseInt(ipD[1]);
+		int serverPort = Integer.parseInt(ipD[1]);
 		ipD = ipD[0].split("\\.");
 		for (int q = 0; q < 4; q++) {
 			IPv4Host[q] = (byte) (Integer.parseInt(ipD[q]));
@@ -122,7 +125,7 @@ public class Client {
 		ipD = new String[]{arg[3], arg[4]};
 		Socket socket = null;
 		try {
-			socket = new Socket(InetAddress.getByAddress(IPv4Host), Server.port);
+			socket = new Socket(InetAddress.getByAddress(IPv4Host), serverPort);
 		}
 		catch (Exception E) {
 			System.out.println("Could not connect to server due to an Exception having occurred: " + E);
@@ -149,7 +152,7 @@ public class Client {
 			out.write(unB);
 			byte[] nonce0 = new byte[32];
 			in.read(nonce0);
-			Server.GUSID = dIn.readLong();
+			long sGUSID = dIn.readLong();
 			Socket authSock = null;
 			try {
 				authSock = new Socket(InetAddress.getByAddress(authIPv4Host), authPort);
@@ -159,6 +162,7 @@ public class Client {
 				socket.close();
 				System.exit(8);
 			}
+			byte[] remAuthAddrBytes = authSock.getInetAddress().getAddress();
 			InputStream an = authSock.getInputStream();
 			OutputStream aut = authSock.getOutputStream();
 			DataOutputStream aOut = new DataOutputStream(aut);
@@ -172,7 +176,7 @@ public class Client {
 			}
 			byte[] nonce1 = new byte[32];
 			an.read(nonce1);
-			aOut.writeLong(Server.GUSID);
+			aOut.writeLong(sGUSID);
 			aut.write(nonce0);
 			byte[] pw = arg[1].getBytes(StandardCharsets.UTF_16BE);
 			byte[] pwB = new byte[32];
@@ -229,6 +233,9 @@ public class Client {
 			out.write(unB);
 			dOut.writeLong(UID);
 			out.write(nonce0);
+			dOut.writeInt(remAuthAddrBytes.length);
+			dOut.write(remAuthAddrBytes);
+			System.out.println("AFTER SENDING AUTH ADDR");
 			if ((byte) in.read() != 0x63) {
 				System.out.println("Authentication failure: Target server does not approve");
 				socket.close();
@@ -241,11 +248,11 @@ public class Client {
 		username = arg[0];
 		serverVersion = dIn.readInt();
 		System.out.println("Server version: " + serverVersion);
-		dOut.writeInt(Server.version);
+		dOut.writeInt(Globals.version);
 		if (in.read() == 0x55) {
 			byte[] msg = new byte[dIn.readInt()];
 			in.read(msg);
-			System.out.println("Disconnected with reason: " + (new String(msg, StandardCharsets.UTF_16BE)));//TODO Prevent message spoofing
+			System.out.println("Disconnected with reason: \u001b[38;5;9m" + (new String(msg, StandardCharsets.UTF_16BE)).replaceAll("\u001b", "\\u001b") + "\u001b[39m");
 			socket.close();
 			return;
 		}
@@ -268,7 +275,15 @@ public class Client {
 					}
 				}
 			}.start();
-			Server.level = Level.deserialize(dIn);
+			// System.out.println(Arrays.toString(dIn.readNBytes(Math.min(dIn.available(), 1000000))));
+			// if (true) {
+			// throw new Exception("STOP HERE");
+			// }
+			// System.out.println(Arrays.toString(dIn.readNBytes(dIn.available())));
+			// if (true) {
+			// throw new BreakPointException("AFTER LEVEL PRINT");
+			// }
+			// Server.level = Level.deserialize(dIn);
 			byte b;
 			int i;
 			turnInterval = dIn.readShort();

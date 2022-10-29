@@ -1,11 +1,16 @@
 package termWorld;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.util.Arrays;
+
+import TWCommon.Text;
 class EntityPlayer extends Entity {
 	static final int invSpace = 15;
 	byte cooldown;
 	int p;
-	EntityPlayer(int x, int y, long data, short health) {
+	public byte[] playerID;
+	EntityPlayer(byte[] playerID, int x, int y, long data, short health) {
+		this.playerID = playerID;
 		type = 2;
 		inventory = new Item[invSpace];
 		face = '\u263a';
@@ -20,7 +25,8 @@ class EntityPlayer extends Entity {
 			color = 9;
 		}
 	}
-	EntityPlayer(int x, int y, long data, short health, Item[] inv) {
+	EntityPlayer(byte[] playerID, int x, int y, long data, short health, Item[] inv) {
+		this.playerID = playerID;
 		inventory = new Item[invSpace];
 		System.arraycopy(inv, 0, inventory, 0, Math.min(invSpace, inv.length));
 		face = '\u263a';
@@ -46,17 +52,25 @@ class EntityPlayer extends Entity {
 			}
 			I.serialize(dataOut);
 		}
+		dataOut.writeInt(playerID.length);
+		dataOut.write(playerID);
 		dataOut.writeInt(x);
 		dataOut.writeInt(y);
 		dataOut.writeLong((((long) cooldown) << 11) ^ (((long) color) << 6));
 		dataOut.writeShort(health);
 	}
 	static EntityPlayer fromDataStream(DataInputStream readFrom) throws Exception {
+		// readFrom.read();
 		Item[] inv = new Item[readFrom.readInt()];
+		System.out.println(inv.length);
+		if (inv.length > 15) {
+			System.out.println(Arrays.toString(readFrom.readNBytes(50)));
+			throw new InvalidDataException("BAD INVENTORY LENGTH");
+		}
 		for (int n = 0; n < inv.length; n++) {
 			inv[n] = Item.deserialize(readFrom);
 		}
-		return new EntityPlayer(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort(), inv);
+		return new EntityPlayer(readFrom.readNBytes(readFrom.readInt()), readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort(), inv);
 	}
 	boolean checkDeath(int EID) {
 		if (data < 0) {
@@ -66,6 +80,9 @@ class EntityPlayer extends Entity {
 			return true;
 		}
 		return false;
+	}
+	void onMove() throws Exception {
+		//
 	}
 	protected synchronized void animate(int EID) throws Exception {
 		if (checkDeath(EID)) {

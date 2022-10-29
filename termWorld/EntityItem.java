@@ -35,6 +35,9 @@ public class EntityItem extends Entity {
 		strm.writeLong(data);
 	}
 	static EntityItem fromDataStream(DataInputStream strm) throws Exception {
-		return new EntityItem(strm.readInt(), strm.readInt(), Item.deserialize(strm), strm.readLong());
+		int x = strm.readInt();
+		int y = strm.readInt();
+		System.out.println("entity item: " + x + " " + y);
+		return new EntityItem(x, y, Item.deserialize(strm), strm.readLong());
 	}
 }

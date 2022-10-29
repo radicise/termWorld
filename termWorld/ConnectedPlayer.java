@@ -14,6 +14,7 @@ import java.security.SecureRandom;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 
+import TWCommon.Globals;
 import TWCommon.Sec;
 
 import javax.crypto.Cipher;
@@ -128,6 +129,10 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		this.out = new BufferedOutputStream(socket.getOutputStream());
 		this.in = socket.getInputStream();
 		h = socket.getInputStream().read();
+		if (!Server.running) {
+			kick("SERVER NOT RUNNING", true);
+			return;
+		}
 		if (h == -1) {
 			throw new Exception();
 		}
@@ -186,6 +191,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	void serve() throws Exception {
 		DataOutputStream dOut = new DataOutputStream(out);
 		DataInputStream dIn = new DataInputStream(in);
+		byte[] authaddr;
 		try {
 			byte[] uname = new byte[32];
 			in.read(uname);
@@ -198,6 +204,11 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			UID = dIn.readLong();
 			byte[] claim = new byte[32];
 			in.read(claim);
+			System.out.println("BEFORE AUTH ADDR BUF CREATION");
+			authaddr = new byte[dIn.readInt()];
+			System.out.println("BEFORE AUTH ADDR BUF FILL");
+			dIn.read(authaddr);
+			System.out.println(Arrays.toString(authaddr));
 			byte[] toh = new byte[104];
 			System.arraycopy(uname, 0, toh, 0, 32);
 			System.arraycopy(nonce, 0, toh, 32, 32);
@@ -241,10 +252,10 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			Server.level.ent[EID] = null;
 			return;
 		}
-		dOut.writeInt(Server.version);
+		dOut.writeInt(Globals.version);
 		out.flush();
 		clientVersion = dIn.readInt();
-		if (clientVersion < Server.version) {
+		if (clientVersion < Globals.version) {
 			out.write(0x55);
 			dOut.writeInt(32);
 			out.write("Outdated client!".getBytes(StandardCharsets.UTF_16BE));
@@ -254,7 +265,20 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			socket.close();
 			return;
 		}
-		if (Server.level.entities.containsKey((((long) Server.level.spawnX) << 32) | ((long) Server.level.spawnY))) {
+		byte[] playerID = Arrays.copyOf(authaddr, authaddr.length + 8);
+		for (int i = 0; i < 8; i ++) {
+			playerID[authaddr.length + i] = (byte) ((UID >> i) & 0xff);
+		}
+		int spawnX = 0;
+		int spawnY = 0;
+		Entity playerent;
+		boolean hasID = Server.level.playerMap.containsKey(playerID);
+		if (hasID) {
+			playerent = Server.level.playerMap.get(playerID);
+			spawnX = playerent.x;
+			spawnY = playerent.y;
+		}
+		if (Server.level.entities.containsKey((((long) spawnX) << 32) | ((long) spawnY))) {
 			out.write(0x55);
 			dOut.writeInt(28);
 			out.write("Spawn blocked!".getBytes(StandardCharsets.UTF_16BE));
@@ -266,12 +290,16 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		}
 		out.write(0x63);
 		Server.Locker.lock();
-		Server.level.ent[EID] = new EntityPlayer(Server.level.spawnX, Server.level.spawnY, (System.currentTimeMillis() << 6) & 0x380, (short) 10);
+		Server.level.ent[EID] = new EntityPlayer(playerID, Server.level.spawnX, Server.level.spawnY, (System.currentTimeMillis() << 6) & 0x380, (short) 10);
+		if (!hasID) {
+			Server.level.playerMap.put(playerID, Server.level.ent[EID]);
+		}
 		Server.level.entities.put((((long) Server.level.ent[EID].x) << 32) | ((long) Server.level.ent[EID].y), EID);
 		Server.buf.put((byte) 6);
 		Server.level.ent[EID].serialize(Server.bstr);
 		System.out.println("A client has connected: " + socket);
-		Server.level.serialize(dOut);//TODO Use gzip
+		Server.level.toPlayerStream(dOut);
+		// Server.level.serialize(dOut);//TODO Use gzip
 		dOut.writeShort(Server.turnInterval);
 		dOut.writeInt(Server.level.ent[EID].x);//TODO Prevent lag due to blocking writes
 		dOut.writeInt(Server.level.ent[EID].y);//TODO Prevent lag due to blocking writes
