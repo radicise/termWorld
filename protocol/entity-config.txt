@@ -1,0 +1,7 @@
+NOT A COMMUNICATION PROTOCOL
+
+entity config data shall not have a standard format and is entirely subject to the designs of the entity reading and writing to its config file
+
+what is specified is the following:
+
+all entities MUST fully implement the config methods defined on the Entity base class
