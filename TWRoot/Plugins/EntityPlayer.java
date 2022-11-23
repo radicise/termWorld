@@ -5,12 +5,14 @@ import java.util.Arrays;
 
 import TWRoot.termWorld.InvalidDataException;
 import TWRoot.termWorld.Server;
-
+import TWRoot.TWCommon.FixedFrame;
 import TWRoot.TWCommon.Text;
 public class EntityPlayer extends Entity {
 	static final int invSpace = 15;
 	byte cooldown;
-	int p;
+	// int p;
+	private int nxtframe = 0;
+	private short nxtfparams = 0;
 	public byte[] playerID;
 	public EntityPlayer(byte[] playerID, int x, int y, long data, short health) {
 		this.playerID = playerID;
@@ -75,11 +77,9 @@ public class EntityPlayer extends Entity {
 		}
 		return new EntityPlayer(readFrom.readNBytes(readFrom.readInt()), readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort(), inv);
 	}
-	public boolean checkDeath(int EID) {
-		if (data < 0) {
-			Server.level.entities.remove((((long) Server.level.ent[EID].x) << 32) | ((long) Server.level.ent[EID].y));
-			Server.level.ent[EID] = null;
-			Server.buf.put((byte) 7).putInt(x).putInt(y);
+	public boolean checkDeath(int EID) throws Exception {
+		if (data < 0 || health <= 0) {
+			destroy();
 			return true;
 		}
 		return false;
@@ -87,62 +87,138 @@ public class EntityPlayer extends Entity {
 	void onMove() throws Exception {
 		//
 	}
-	public synchronized void animate(int EID) throws Exception {
-		if (checkDeath(EID)) {
+	public synchronized void schedule(int opcode, short params) {
+		nxtframe = opcode;
+		nxtfparams = params;
+	}
+	public synchronized void animate() throws Exception {
+		if (checkDeath()) {
 			return;
 		}
-		if (((data & 8) == 8) || ((data & 2) == 2)) {
-			int mX = 0;
-			int mY = 0;
-			if ((data & 8) == 8) {
-				mX = ((int) ((data & 4) >>> 1)) - 1;
+		// no op
+		if (nxtframe == 0) {
+			return;
+		}
+		if (nxtframe == 1) {
+			int mX = 1;
+			int mY = 1;
+			if ((nxtfparams & 0b1) != 0) {
+				mX = -1;
 			}
-			if ((data & 2) == 2) {
-				mY = ((int) ((data & 1) << 1)) - 1;
+			if ((nxtfparams & 0b10) != 0) {
+				mY = -1;
 			}
 			moveBy(mX, mY, 0);
 		}
+		// if (((data & 8) == 8) || ((data & 2) == 2)) {
+		// 	int mX = 0;
+		// 	int mY = 0;
+		// 	if ((data & 8) == 8) {
+		// 		mX = ((int) ((data & 4) >>> 1)) - 1;
+		// 	}
+		// 	if ((data & 2) == 2) {
+		// 		mY = ((int) ((data & 1) << 1)) - 1;
+		// 	}
+		// 	moveBy(mX, mY, 0);
+		// }
 		if (cooldown > 0) {
 			cooldown--;
 		}
+		final int width = PluginMaster.level.terrain.width;
+		final int height = PluginMaster.level.terrain.height;
+		// final int p = y * width + x;
 		if (cooldown < 1) {
-			if ((data & 0x10) != 0) {
+			if (nxtframe != 2) {
+				nxtframe = 0;
+				return;
+			}
+			FixedFrame terrain = PluginMaster.level.terrain;
+			if ((nxtfparams & 0b1) != 0) { // handles destruction
 				cooldown = 7;
-				p = (y * Server.level.terrain.width) + x;
+				// int flags = 0;
 				if (x > 0) {
-					Server.level.terrain.tiles[p - 1] = (byte) (0);
-					Server.buf.put((byte) 10).putInt(p - 1).put((byte) (0));
+					// flags |= 1;
+					terrain.spaces[terrain.xyToi(x-1, y)].destroy();
 				}
-				if (x < (Server.level.terrain.width - 1)) {
-					Server.level.terrain.tiles[p + 1] = (byte) (0);
-					Server.buf.put((byte) 10).putInt(p + 1).put((byte) (0));
+				if (x < width) {
+					// flags |= 2;
+					terrain.spaces[terrain.xyToi(x+1, y)].destroy();
 				}
-				Server.level.terrain.tiles[p] = (byte) (0);
-				Server.buf.put((byte) 10).putInt(p).put((byte) (0));
-				p -= Server.level.terrain.width;
-				if (p >= 0) {
-					Server.level.terrain.tiles[p] = (byte) (0);
-					Server.buf.put((byte) 10).putInt(p).put((byte) (0));
+				if (y > 0) {
+					// flags |= 4;
+					terrain.spaces[terrain.xyToi(x, y-1)].destroy();
 				}
-				p += (Server.level.terrain.width * 2);
-				if (p < Server.level.terrain.tiles.length) {
-					Server.level.terrain.tiles[p] = (byte) (0);
-					Server.buf.put((byte) 10).putInt(p).put((byte) (0));
+				if (y < height) {
+					// flags |= 8;
+					terrain.spaces[terrain.xyToi(x, y+1)].destroy();
 				}
-			}
-			if ((data & 0x20) != 0) {
+				// // top left
+				// if ((flags ^ 5) == 0) {
+				// 	terrain.spaces[terrain.xyToi(x-1, y-1)].destroy();
+				// }
+				// // top right
+				// if ((flags ^ 6) == 0) {
+				// 	terrain.spaces[terrain.xyToi(x+1, y-1)].destroy();
+				// }
+				// // bottom left
+				// if ((flags ^ 9) == 0) {
+				// 	terrain.spaces[terrain.xyToi(x-1, y+1)].destroy();
+				// }
+				// // bottom right
+				// if ((flags ^ 10) == 0) {
+				// 	terrain.spaces[terrain.xyToi(x+1, y+1)].destroy();
+				// }
+			} else if ((nxtfparams & 0b10) != 0) {
 				cooldown = 4;
-				p = (y * Server.level.terrain.width) + x;
-				Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + 1) % Text.amountAccessible);
-				Server.buf.put((byte) 10).putInt(p).put(Server.level.terrain.tiles[p]);
-			}
-			if ((data & 0x400) != 0) {
-				cooldown = 4;
-				p = (y * Server.level.terrain.width) + x;
-				Server.level.terrain.tiles[p] = (byte) ((Server.level.terrain.tiles[p] + (Text.amountAccessible - 1)) % Text.amountAccessible);
-				Server.buf.put((byte) 10).putInt(p).put(Server.level.terrain.tiles[p]);
+				if (covering.ftype == 0) {
+					covering = new TileEmpty(1, x, y);
+				}
+				int dif = (nxtfparams & (0b100 << 8)) != 0 ? -1 : 1;
+				int id = PluginMaster.getClassId(covering.getClass(), false);
+				id += dif;
+				id = id % PluginMaster.contiles.length;
+				if (id == 0) {
+					id += dif;
+				}
+				covering = PluginMaster.contiles[id].getConstructor(new Class[]{int.class, int.class, int.class}).newInstance(1, x, y);
 			}
 		}
-		data &= (~0x43f);
+		nxtframe = 0;
+		// if (cooldown < 1) {
+		// 	if ((data & 0x10) != 0) {
+		// 		cooldown = 7;
+		// 		if (x > 0) {
+		// 			PluginMaster.level.terrain.tiles[p - 1] = (byte) (0);
+		// 			PluginMaster.buf.put((byte) 10).putInt(p - 1).put((byte) (0));
+		// 		}
+		// 		if (x < (PluginMaster.level.terrain.width - 1)) {
+		// 			PluginMaster.level.terrain.tiles[p + 1] = (byte) (0);
+		// 			PluginMaster.buf.put((byte) 10).putInt(p + 1).put((byte) (0));
+		// 		}
+		// 		PluginMaster.level.terrain.tiles[p] = (byte) (0);
+		// 		PluginMaster.buf.put((byte) 10).putInt(p).put((byte) (0));
+		// 		p -= PluginMaster.level.terrain.width;
+		// 		if (p >= 0) {
+		// 			PluginMaster.level.terrain.tiles[p] = (byte) (0);
+		// 			PluginMaster.buf.put((byte) 10).putInt(p).put((byte) (0));
+		// 		}
+		// 		p += (PluginMaster.level.terrain.width * 2);
+		// 		if (p < PluginMaster.level.terrain.tiles.length) {
+		// 			PluginMaster.level.terrain.tiles[p] = (byte) (0);
+		// 			PluginMaster.buf.put((byte) 10).putInt(p).put((byte) (0));
+		// 		}
+		// 	}
+		// 	if ((data & 0x20) != 0) {
+		// 		cooldown = 4;
+		// 		PluginMaster.level.terrain.tiles[p] = (byte) ((PluginMaster.level.terrain.tiles[p] + 1) % Text.amountAccessible);
+		// 		PluginMaster.buf.put((byte) 10).putInt(p).put(PluginMaster.level.terrain.tiles[p]);
+		// 	}
+		// 	if ((data & 0x400) != 0) {
+		// 		cooldown = 4;
+		// 		PluginMaster.level.terrain.tiles[p] = (byte) ((PluginMaster.level.terrain.tiles[p] + (Text.amountAccessible - 1)) % Text.amountAccessible);
+		// 		PluginMaster.buf.put((byte) 10).putInt(p).put(PluginMaster.level.terrain.tiles[p]);
+		// 	}
+		// }
+		// data &= (~0x43f);
 	}
 }

@@ -14,8 +14,9 @@ import java.security.SecureRandom;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.Arrays;
 
-import TWRoot.Plugins.Entity;
 import TWRoot.Plugins.EntityPlayer;
+import TWRoot.Plugins.PluginMaster;
+import TWRoot.Plugins.SpaceFiller;
 import TWRoot.TWCommon.Globals;
 import TWRoot.TWCommon.Sec;
 
@@ -24,9 +25,10 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	BufferedOutputStream out;
 	InputStream in;
 	Socket socket;
+	private EntityPlayer playerent;
 	public String username;
 	public long UID;
-	public int EID;
+	// public int EID;
 	public long SUID;
 	public volatile boolean alive = true;
 	public int clientVersion;
@@ -120,6 +122,11 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 				case 0x04:
 					Server.stop();
 					break;
+				case 0x10:
+					String dbg = PluginMaster.level.debugRender();
+					dOut.writeInt(dbg.length());
+					dOut.writeChars(dbg);
+					break;
 				default:
 					dOut.write(cry.crypt(0x55));
 					break;
@@ -139,7 +146,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			throw new Exception();
 		}
 		if (h == 0x63) {
-			EID = Server.level.nextSlot();
+			// EID = Server.level.nextSlot();
 		}
 		if (h == 0x01) {
 			return;
@@ -206,11 +213,11 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			UID = dIn.readLong();
 			byte[] claim = new byte[32];
 			in.read(claim);
-			System.out.println("BEFORE AUTH ADDR BUF CREATION");
+			// System.out.println("BEFORE AUTH ADDR BUF CREATION");
 			authaddr = new byte[dIn.readInt()];
-			System.out.println("BEFORE AUTH ADDR BUF FILL");
+			// System.out.println("BEFORE AUTH ADDR BUF FILL");
 			dIn.read(authaddr);
-			System.out.println(Arrays.toString(authaddr));
+			// System.out.println(Arrays.toString(authaddr));
 			byte[] toh = new byte[104];
 			System.arraycopy(uname, 0, toh, 0, 32);
 			System.arraycopy(nonce, 0, toh, 32, 32);
@@ -251,7 +258,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		}
 		catch (Exception E) {
 			System.out.println("A connecting user failed to be authenticated due to an Exception having occurred: " + E);
-			Server.level.ent[EID] = null;
+			// Server.level.ent[EID] = null;
 			return;
 		}
 		dOut.writeInt(Globals.version);
@@ -263,7 +270,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			out.write("Outdated client!".getBytes(StandardCharsets.UTF_16BE));
 			out.flush();
 			alive = false;
-			Server.level.ent[EID] = null;
+			// Server.level.ent[EID] = null;
 			socket.close();
 			return;
 		}
@@ -271,65 +278,70 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		for (int i = 0; i < 8; i ++) {
 			playerID[authaddr.length + i] = (byte) ((UID >> i) & 0xff);
 		}
-		int spawnX = 0;
-		int spawnY = 0;
-		Entity playerent;
+		int spawnX = Server.level.spawnX;
+		int spawnY = Server.level.spawnY;
 		boolean hasID = Server.level.playerMap.containsKey(playerID);
 		if (hasID) {
 			playerent = Server.level.playerMap.get(playerID);
 			spawnX = playerent.x;
 			spawnY = playerent.y;
 		}
-		if (Server.level.entities.containsKey((((long) spawnX) << 32) | ((long) spawnY))) {
+		int spawnloc = spawnY*Server.level.terrain.width+spawnX;
+		if (!Server.level.terrain.spaces[spawnloc].canCover) {
 			out.write(0x55);
 			dOut.writeInt(28);
 			out.write("Spawn blocked!".getBytes(StandardCharsets.UTF_16BE));
 			out.flush();
 			alive = false;
-			Server.level.ent[EID] = null;
 			socket.close();
 			return;
 		}
 		out.write(0x63);
 		Server.Locker.lock();
-		Server.level.ent[EID] = new EntityPlayer(playerID, Server.level.spawnX, Server.level.spawnY, (System.currentTimeMillis() << 6) & 0x380, (short) 10);
+		SpaceFiller storedspot = Server.level.terrain.spaces[spawnloc];
+		Server.level.terrain.spaces[spawnloc] = new EntityPlayer(playerID, Server.level.spawnX, Server.level.spawnY, (System.currentTimeMillis() << 6) & 0x380, (short) 10);
+		Server.level.terrain.spaces[spawnloc].covering = storedspot;
 		if (!hasID) {
-			Server.level.playerMap.put(playerID, Server.level.ent[EID]);
+			Server.level.playerMap.put(playerID, (EntityPlayer) Server.level.terrain.spaces[spawnloc]);
 		}
-		Server.level.entities.put((((long) Server.level.ent[EID].x) << 32) | ((long) Server.level.ent[EID].y), EID);
-		Server.buf.put((byte) 6);
-		Server.level.ent[EID].serialize(Server.bstr);
 		System.out.println("A client has connected: " + socket);
-		Server.level.toPlayerStream(dOut);
-		// Server.level.serialize(dOut);//TODO Use gzip
+		PluginMaster.sendIdMap(dOut);
+		Server.level.serialize(dOut);//TODO Use gzip
 		dOut.writeShort(Server.turnInterval);
-		dOut.writeInt(Server.level.ent[EID].x);//TODO Prevent lag due to blocking writes
-		dOut.writeInt(Server.level.ent[EID].y);//TODO Prevent lag due to blocking writes
+		// dOut.writeInt(Server.level.ent[EID].x);//TODO Prevent lag due to blocking writes
+		// dOut.writeInt(Server.level.ent[EID].y);//TODO Prevent lag due to blocking writes
 		Server.players.add(this);
 		Server.Locker.unlock();
 		int n;
 		try {
 			while (true) {
 				n = in.read();
-				synchronized (Server.level.ent[EID]) {
-					if ((n & 128) == 128) {
-						n &= 3;
-						Server.level.ent[EID].data = ((Server.level.ent[EID].data & (~0xf)) ^ ((((Server.level.ent[EID].data) & (0x33 >>> (n & 2))) ^ ((n | 2) << (~(n | 0xfffffffd)))) & 0xf));
-					}
-					else {
-						switch (n) {
-							case (100):
-								Server.level.ent[EID].data |= 0x20;
-								break;
-							case (101):
-								Server.level.ent[EID].data |= 0x10;
-								break;
-							case (102):
-								Server.level.ent[EID].data |= 0x400;
-								break;
-						}
-					}
+				if (n == 0x01) { // handle movement
+					n = in.read();
+					playerent.schedule(1, (short) n);
+				} else if (n == 0x02) { // handle terrain changing
+					n = in.read();
+					playerent.schedule(2, (short) ((n << 8) | in.read()));
 				}
+				// synchronized (Server.level.ent[EID]) {
+				// 	if ((n & 128) == 128) {
+				// 		n &= 3;
+				// 		Server.level.ent[EID].data = ((Server.level.ent[EID].data & (~0xf)) ^ ((((Server.level.ent[EID].data) & (0x33 >>> (n & 2))) ^ ((n | 2) << (~(n | 0xfffffffd)))) & 0xf));
+				// 	}
+				// 	else {
+				// 		switch (n) {
+				// 			case (100):
+				// 				Server.level.ent[EID].data |= 0x20;
+				// 				break;
+				// 			case (101):
+				// 				Server.level.ent[EID].data |= 0x10;
+				// 				break;
+				// 			case (102):
+				// 				Server.level.ent[EID].data |= 0x400;
+				// 				break;
+				// 		}
+				// 	}
+				// }
 			}
 		}
 		catch (Exception E) {
@@ -345,7 +357,8 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	void kick(String message, boolean suppress) throws Exception {
 		if (!suppress) {
 			alive = false;
-			Server.level.ent[EID].data = -1;
+			Server.level.addDestruction(playerent.x, playerent.y);
+			Server.level.terrain.spaces[playerent.x+Server.level.terrain.width*playerent.y].destroy();
 			synchronized(Server.players) {
 				Server.players.remove(this);
 			}

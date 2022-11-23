@@ -10,7 +10,10 @@ import java.security.MessageDigest;
 import java.util.Arrays;
 
 import TWRoot.Plugins.Entity;
+import TWRoot.Plugins.Item;
+import TWRoot.Plugins.PluginMaster;
 import TWRoot.TWCommon.Globals;
+import TWRoot.TWCommon.LevelRefactored;
 import TWRoot.TWCommon.Text;
 
 public class Client {
@@ -34,6 +37,7 @@ public class Client {
 	static long UID;
 	public static int EID;
 	static DisplayRenderer render;
+	public static LevelRefactored level;
 	static void movementCapture() throws Exception {
 		int n = 0;
 		while(true) {
@@ -289,7 +293,11 @@ public class Client {
 			// if (true) {
 			// throw new BreakPointException("AFTER LEVEL PRINT");
 			// }
-			// Server.level = Level.deserialize(dIn);
+			// level = Level.deserialize(dIn);
+			PluginMaster.init(1);
+			PluginMaster.loadIdMap(dIn);
+			level = LevelRefactored.deserialize(dIn, true);
+			PluginMaster.level = level;
 			byte b;
 			int i;
 			turnInterval = dIn.readShort();
@@ -300,54 +308,11 @@ public class Client {
 			boolean notFound = true;
 			while (true) {
 				while ((b = ((byte) in.read())) != 2) {
-					if ((b & 2) == 0) {
-						id = dIn.readLong();
-						i = Server.level.entities.get(id);
-						if ((b & 1) == 1) {
-							Server.level.ent[i].face = dIn.readChar();
-						}
-						if ((b & 4) == 4) {
-							Server.level.entities.remove(id);
-							Server.level.dispFaces.remove((id >>> 32) ^ (id << 32));
-							Server.level.ent[i].x = dIn.readInt();
-							Server.level.ent[i].y = dIn.readInt();
-							Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) ^ ((long) Server.level.ent[i].x), i);
-							Server.level.entities.put((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y), i);
-						}
-						if ((b & 8) == 8) {
-							Server.level.ent[i].health = dIn.readShort();
-						}
-						if ((b & 16) ==  16) {
-							Server.level.ent[i].inventory[dIn.readInt()] = Item.deserialize(dIn);
-						}
-					}
-					else if (b == 3) {
+					if (b == 3) {
 						mB = new byte[dIn.readInt()];
 						in.read(mB);
 						System.out.println("Disconnected with reason: " + new String(mB, "UTF-8"));
 						System.exit(8);
-					}
-					else if (b == 10) {
-						Server.level.terrain.tiles[dIn.readInt()] = (byte) (in.read());
-					}
-					else if (b == 6) {
-						i = Server.level.nextSlot();
-						Server.level.ent[i] = Entity.deserialize(dIn);
-						if (notFound && (Server.level.ent[i] != null)) {//TODO Make this better
-							if (oID == ((((long) Server.level.ent[i].x) << 32) ^ ((long) Server.level.ent[i].y))) {
-								EID = i;
-								notFound = false;
-							}
-						}
-						if (Server.level.ent[i] != null) {
-							Server.level.dispFaces.put((((long) Server.level.ent[i].y) << 32) | ((long) Server.level.ent[i].x), i);
-							Server.level.entities.put((((long) Server.level.ent[i].x) << 32) | ((long) Server.level.ent[i].y), i);
-						}
-					}
-					else if (b == 7) {
-						id = dIn.readLong();
-						Server.level.dispFaces.remove((id << 32) ^ (id >>> 32));
-						Server.level.entities.remove(id);
 					}
 				}
 				synchronized (cooldown) {
@@ -360,39 +325,40 @@ public class Client {
 					Thread.sleep(100);
 				}
 				Text.buffered.write('[');
-				Text.buffered.write(Text.tiles[Server.level.terrain.tiles[(Server.level.ent[EID].y * Server.level.terrain.width) + Server.level.ent[EID].x]]);
+				Text.buffered.write(level.terrain.spaces[EID].covering.face);
 				Text.buffered.write(']');
 				Text.buffered.write('<');
 				Text.buffered.write(Short.toString(cooldown));
 				Text.buffered.write('>');
 				Text.buffered.write('{');
-				for (int p = 0; p < (Server.level.ent[EID].inventory.length - 1); p++) {
-					if (Server.level.ent[EID].inventory[p] == null) {
+				Entity ent = (Entity) level.terrain.spaces[EID];
+				for (int p = 0; p < (ent.inventory.length - 1); p++) {
+					if (ent.inventory[p] == null) {
 						Text.buffered.write(' ');
 					}
 					else {
-						Text.buffered.write(Server.level.ent[EID].inventory[p].thing.face);
+						Text.buffered.write(ent.inventory[p].thing.face);
 						Text.buffered.write('x');
-						Text.buffered.write(Integer.toString(Server.level.ent[EID].inventory[p].quantity));
+						Text.buffered.write(Integer.toString(ent.inventory[p].quantity));
 					}
 					Text.buffered.write(',');
 				}
-				if (Server.level.ent[EID].inventory[Server.level.ent[EID].inventory.length - 1] == null) {
+				if (ent.inventory[ent.inventory.length - 1] == null) {
 					Text.buffered.write(' ');
 				}
 				else {
-					Text.buffered.write(Server.level.ent[EID].inventory[Server.level.ent[EID].inventory.length - 1].thing.face);
+					Text.buffered.write(ent.inventory[ent.inventory.length - 1].thing.face);
 					Text.buffered.write('x');
-					Text.buffered.write(Integer.toString(Server.level.ent[EID].inventory[Server.level.ent[EID].inventory.length - 1].quantity));
+					Text.buffered.write(Integer.toString(ent.inventory[ent.inventory.length - 1].quantity));
 				}
 				Text.buffered.write('}');
 				Text.buffered.write('(');
-				Text.buffered.write(Integer.toString(Server.level.ent[EID].x));
+				Text.buffered.write(Integer.toString(ent.x));
 				Text.buffered.write(',');
 				Text.buffered.write(' ');
-				Text.buffered.write(Integer.toString(Server.level.ent[EID].y));
+				Text.buffered.write(Integer.toString(ent.y));
 				Text.buffered.write(')');
-				Server.level.display();
+				// level.display();
 				up = false;
 				left = false;
 				down = false;

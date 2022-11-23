@@ -9,14 +9,14 @@ public class Item {
 		CLOTHPATCH('\u221e'),
 		WATERBOTTLE('\u00a1'),
 		STONE('o');
-		char face;
+		public char face;
 		static Thing[] things = new Thing[]{CLOTHPATCH, WATERBOTTLE, STONE};//array with all of the items, their indices in the array being consistent with their ordinal values
 		Thing(char face) {
 			this.face = face;
 		}
 	}
-	Thing thing;
-	byte quantity;
+	public Thing thing;
+	public byte quantity;
 	public Item(Thing item, byte quantity) {
 		this.thing = item;
 		this.quantity = quantity;

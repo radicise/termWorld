@@ -3,9 +3,10 @@ package TWRoot.Plugins;
 /**
  * provides default implementations of standard plugin methods
  */
+@SuppressWarnings("unchecked")
 public abstract class Plugin {
-    /** {@link Entity} contributions */
-    public static Class<Entity>[] contributes;
+    /** {@link SpaceFiller} contributions */
+    public static Class<? extends SpaceFiller>[] contributes = new Class[]{};
     /**
      * post level gen
      * @param args

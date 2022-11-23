@@ -20,12 +20,10 @@ public class EntityItem extends Entity {
 			color = 9;
 		}
 	}
-	public void animate(int EID) {
+	public void animate(int EID) throws Exception {
 		health = 0;
 		if (data < 0) {
-			Entity.level.entities.remove((((long) x) << 32) ^ ((long) y));
-			Entity.level.ent[EID] = null;
-			// Server.buf.put((byte) 7).putInt(x).putInt(y);
+			destroy();
 		}
 	}
 	public void serialize(DataOutputStream strm) throws Exception {

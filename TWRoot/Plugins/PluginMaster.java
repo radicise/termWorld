@@ -1,5 +1,7 @@
 package TWRoot.Plugins;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -13,9 +15,21 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import TWRoot.TWCommon.LevelRefactored;
+
 public class PluginMaster {
-    /** contributed {@link Entity} list generated from all plugins */
-    public static Class<? extends Entity>[] contributed;
+    /** contributed {@link SpaceFiller} list generated from all plugins */
+    public static Class<? extends SpaceFiller>[] contributed;
+    public static Class<? extends SpaceFiller>[] contiles;
+    // used to cache id lookup results to improve performance, espescially with string lookups
+    private static HashMap<String, Integer> entStrIdCache = new HashMap<>();
+    private static HashMap<String, Integer> tilStrIdCache = new HashMap<>();
+    // transform ids from server order to client order
+    public static int[] entmap = null;
+    public static int[] tilemap = null;
+    // transform ids from client order to server order
+    public static int[] rentmap = null;
+    public static int[] rtilemap = null;
     // plugin lists
     public static ArrayList<Class<? extends Plugin>> serverPlugs = new ArrayList<>();
     public static ArrayList<Class<? extends Plugin>> commonPlugs = new ArrayList<>();
@@ -28,7 +42,79 @@ public class PluginMaster {
     private static boolean inited = false;
     // base path
     private static Path anchor = Path.of(System.getProperty("user.dir")+"/TWRoot/Plugins");
+    // level for use by plugins
+    public static LevelRefactored level;
+
+    // data
+    public static boolean[] tileSolidity;
+
+    public static void sendIdMap(DataOutputStream strm) throws Exception {
+        strm.writeInt(contributed.length);
+        for (int i = 0; i < contributed.length; i ++) {
+            String n = contributed[i].getSimpleName();
+            strm.writeInt(n.length());
+            strm.writeChars(n);
+            strm.writeInt(i);
+        }
+        strm.writeInt(contiles.length);
+        for (int i = 0; i < contiles.length; i ++) {
+            String n = contiles[i].getSimpleName();
+            strm.writeInt(n.length());
+            strm.writeChars(n);
+            strm.writeInt(i);
+        }
+    }
+
+    public static void loadIdMap(DataInputStream strm) throws Exception {
+        entmap = new int[strm.readInt()];
+        int id; // avoid allocating memory during loop by defining "id" outisde of loops and setting it within loops
+        for (int i = 0; i < entmap.length; i ++) {
+            id = getClassIdByString(new String(strm.readNBytes(strm.readInt())), true);
+            entmap[i] = id;
+            rentmap[id] = i;
+        }
+        tilemap = new int[strm.readInt()];
+        for (int i = 0; i < tilemap.length; i ++) {
+            id = getClassIdByString(new String(strm.readNBytes(strm.readInt())), false);
+            tilemap[i] = id;
+            tilemap[id] = i;
+        }
+    }
+
+    private static int getClassIdByStringSlowSearch(String name, boolean isEntity) {
+        Class<? extends SpaceFiller>[] test = isEntity ? contributed : contiles;
+        for (int i = 0; i < test.length; i ++) {
+            if (test[i].getSimpleName().equals(name)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public static int getClassIdByString(String name, boolean isEntity) {
+        // avoid if statement which would invite code repetition
+        HashMap<String, Integer> cache = isEntity ? entStrIdCache : tilStrIdCache;
+        Integer cached = cache.get(name); // avoid repeating get call
+        if (cached == null) { // check for result not being already cached
+            int res = getClassIdByStringSlowSearch(name, isEntity); // get id by iterating
+            cache.put(name, res); // cache result
+            return res;
+        }
+        return cached.intValue();
+    }
+
     private static String[] getPaths(String path) throws IOException {
+        // check directory exists
+        if (!Files.exists(anchor.resolve(path))) {
+            return new String[]{};
+        }
+        // check if manifest exists
+        if (Files.exists(anchor.resolve(path+"/manifest.txt"))) {
+            FileInputStream fIn = new FileInputStream(new File(anchor.resolve(path+"/manifest.txt").toString()));
+            String[] x = new String(fIn.readAllBytes()).split("\n");
+            fIn.close();
+            return x;
+        }
         // resultant
         List<String> result;
         // try to walk the filesystem tree
@@ -70,6 +156,38 @@ public class PluginMaster {
             m.invoke(null, new Object[]{new String[]{}});
         }
     }
+
+    // used because class comparasons are much faster that string comparasons, so they are preferred and used when possible
+    private static int getClassIdSlowSearch(Class<? extends SpaceFiller> cls, boolean isEntity) {
+        if (isEntity) {
+            for (int i = 0; i < contributed.length; i ++) {
+                if (contributed[i].equals(cls)) {
+                    return i;
+                }
+            }
+        } else {
+            for (int i = 0; i < contiles.length; i ++) {
+                if (contiles[i].equals(cls)) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    public static int getClassId(Class<? extends SpaceFiller> cls, boolean isEntity) {
+        HashMap<String, Integer> cache = isEntity ? entStrIdCache : tilStrIdCache;
+        // avoid multiple method calls which could both allocate memory for a string
+        String name = cls.getSimpleName();
+        // avoid repeated calls to get
+        Integer cached = cache.get(name);
+        if (cached == null) { // check if the result has not been cached previously
+            int res = getClassIdSlowSearch(cls, isEntity); // get the id by iterating
+            cache.put(name, res); // cache result
+            return res;
+        }
+        return cached.intValue();
+    }
     /**
      * do important setup
      * @param party {@code 0} if party is {@link TWRoot.termWorld.Server}, {@code 1} if party is {@link TWRoot.TWClient.Client}
@@ -93,22 +211,25 @@ public class PluginMaster {
         // loads plugins
         loadPlugs(lines);
         // gets contributed entities
-        ArrayList<Class<? extends Entity>> lst = new ArrayList<Class<? extends Entity>>(4);
+        ArrayList<Class<? extends SpaceFiller>> lst = new ArrayList<Class<? extends SpaceFiller>>(4);
         lst.add(Entity.class);
         lst.add(EntityItem.class);
         lst.add(EntityPlayer.class);
         lst.add(null);
         for (Class<? extends Plugin> p : commonPlugs) {
-            Class<? extends Entity>[] x = (Class<? extends Entity>[]) p.getField("contributed").get(null);
-            for (Class<? extends Entity> e : x) {
-                lst.add(e);
+            // System.out.println(p.getSimpleName());
+            Class<? extends SpaceFiller>[] x = (Class<? extends SpaceFiller>[]) p.getField("contributes").get(null);
+            for (Class<? extends SpaceFiller> e : x) {
+                if (e != null) {
+                    lst.add(e);
+                }
             }
         }
-        contributed = (Class<? extends Entity>[]) lst.toArray();
+        // contributed = (Class<? extends Entity>[]) lst.toArray();
+        contributed = lst.toArray(new Class[lst.size()]);
+        int uplugc = party == 0 ? serverPlugs.size() : clientPlugs.size();
         //TODO: remove debug info once done / add proper display for loaded plugins
-        System.out.println(serverPlugs.toString());
-        System.out.println(commonPlugs.toString());
-        System.out.println(clientPlugs.toString());
+        System.out.println(String.format("%d plugins loaded, %d %s, %d common", commonPlugs.size()+uplugc, uplugc, party == 0 ? "Server Side" : "Client Side", commonPlugs.size()));
     }
     /**
      * adds a rule to the specified {@link PluginValidator}
@@ -137,6 +258,6 @@ public class PluginMaster {
         return eventMap.get(hook);
     }
     public static void main(String[] args) throws Exception {
-        init();
+        init(Integer.parseInt(args[0]));
     }
 }

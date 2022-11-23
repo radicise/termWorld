@@ -5,6 +5,7 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.PublicKey;
@@ -14,6 +15,7 @@ import java.util.Arrays;
 public class ManCLI {
     private static final byte[] COMFIN = new byte[]{(byte) 'f', (byte) 'i', (byte) 'n'};
     private static final byte[] COMKIL = new byte[]{(byte) 'k', (byte) 'i', (byte) 'l'};
+    private static final byte[] COMREP = new byte[]{(byte) 'r', (byte) 'e', (byte) 'p'};
     private static final char[] conv = new char[]{'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'};
     private static byte[] parsePassword(String raw) {
         byte[] pass = new byte[32];
@@ -107,6 +109,11 @@ public class ManCLI {
                 dOut.writeInt((int) cry.crypt(0x00));
                 socket.close();
                 return;
+            }
+            if (Arrays.equals(com, COMREP)) {
+                dOut.writeInt((int) cry.crypt(0x10));
+                String dbg = new String(dIn.readNBytes(dIn.readInt()), StandardCharsets.UTF_16BE);
+                System.out.println(dbg);
             }
         }
     }

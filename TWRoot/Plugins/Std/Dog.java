@@ -1,4 +1,4 @@
-package TWRoot.Plugins.Std.TWEntities;
+package TWRoot.Plugins.Std;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import TWRoot.termWorld.Server;
@@ -38,7 +38,7 @@ public class Dog extends Entity {
 			color = 9;
 		}
 	}
-	public void serialize(DataOutputStream dataOut) throws Exception {
+	public void serialize(DataOutputStream dataOut, boolean useMap) throws Exception {
 		dataOut.write(type);
 		dataOut.writeInt(inventory.length);
 		for (Item I : inventory) {
@@ -60,17 +60,17 @@ public class Dog extends Entity {
 			inv[n] = Item.deserialize(readFrom);
 		}
 		Dog d = new Dog(readFrom.readInt(), readFrom.readInt(), readFrom.readLong(), readFrom.readShort(), inv);
-		System.out.println("dog x: " + d.x + " " + d.y);
+		// System.out.println("dog x: " + d.x + " " + d.y);
 		d.face = readFrom.readChar();
 		return d;
 	}
-	public void animate(int EID) throws Exception {
-		if (checkDeath(EID)) {
+	public void animate() throws Exception {
+		if (checkDeath()) {
 			return;
 		}
 		if (healed) {
 			face = 'd';
-			Server.buf.put((byte) 1).putInt(x).putInt(y).putChar(face);
+			// Server.buf.put((byte) 1).putInt(x).putInt(y).putChar(face);
 			healed = false;
 		}
 		if (health < 5) {

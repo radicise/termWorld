@@ -17,21 +17,22 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.locks.ReentrantLock;
 import java.lang.reflect.Method;
+
+import TWRoot.Plugins.PluginMaster;
 import TWRoot.TWCommon.Globals;
-import TWRoot.TWEntities.*;
+import TWRoot.TWCommon.LevelRefactored;
 public class Server {
 	static ReentrantLock Locker = new ReentrantLock();
 	public static int port = Globals.defaultHostPort;
 	static byte[][] authsIPv4;
 	static int[] authsPorts;
 	public static volatile String levelname = "defaultLevel";
-	public static Level level = null;
+	public static LevelRefactored level = null;
 	public static ArrayList<Method> plugs = new ArrayList<Method>();
 	public static short turnInterval = 189;
 	static ArrayList<ConnectedPlayer> players = new ArrayList<ConnectedPlayer>();
 	static Long playerVal = 0L;
 	public static ByteBuffer buf = ByteBuffer.allocate(4096).order(ByteOrder.BIG_ENDIAN);
-	public static DataOutputStream bstr;
 	static byte[] bufBytes = buf.array();
 	static long GUSID = 1;//Server ID
 	private static Timer intervallic;
@@ -98,7 +99,7 @@ public class Server {
 				File f = new File("TWLevelDat");
 				FileInputStream fis = new FileInputStream(f);
 				try {
-					level = Level.unzip(new DataInputStream(fis));
+					level = LevelRefactored.unzip(new DataInputStream(fis));
 				} catch (Exception E) {
 					System.out.println("COULD NOT UNZIP LEVEL");
 					E.printStackTrace();
@@ -109,39 +110,41 @@ public class Server {
 				System.out.println("LEVEL NOT STORED");
 			}
 			if (saved) {
-				level = Level.generate(40, 40, 3827L);
+				level = LevelRefactored.generate(40, 40, 3827L);
 			}
 		}
 		catch (Exception E) {
 			System.out.println("An Exception has occurred: " + E);
 			System.exit(1);
 		}
+		LevelRefactored.noUpdates = false;
+		PluginMaster.level = level;
+		PluginMaster.init(0);
 		int n = 0;
 		for (Method M : plugs) {
 			System.out.println("Loading plugin: " + M.toGenericString() + " in " + M.getDeclaringClass().getCanonicalName());
-			level = ((Level) M.invoke(null));
+			level = ((LevelRefactored) M.invoke(null));
 			n++;
 			System.out.println("Plugin loaded");
 		}
 		System.out.println("Plugins loaded: " + n);
-		bstr = new DataOutputStream(new ByteBufferOutputStream(buf));
+		level.globalOut = new DataOutputStream(new ByteBufferOutputStream(buf));
 		ConnectedPlayer.initRandom();
 		ConnectedPlayer.updateSecret();
 		ServerSocket server = new ServerSocket(port);
 		intervallic = new Timer();
 		intervallic.schedule(new TimerTask() {
 			public void run() {
+				// if (Thread.currentThread().isInterrupted()) {running = false;}
 				if (!running) {return;}
 				if (Locker.tryLock()) {
 					try {
 						int n = 0;
-						for (Integer value : (level.entities.values().toArray(new Integer[0]))) {
-						    level.ent[value].animate(value);
-						}
+						level.terrain.animate();
 						ConnectedPlayer CoPl;
 						synchronized (players) {
 							buf.put((byte) 2);
-							int pos = buf.position();
+							final int pos = buf.position();
 							int i = players.size();
 							while (n < i) {
 					    		CoPl = players.get(n);
