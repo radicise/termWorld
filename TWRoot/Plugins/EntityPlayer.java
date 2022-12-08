@@ -31,6 +31,7 @@ public class EntityPlayer extends Entity {
 		}
 	}
 	public EntityPlayer(byte[] playerID, int x, int y, long data, short health, Item[] inv) {
+		type = 2;
 		this.playerID = playerID;
 		inventory = new Item[invSpace];
 		System.arraycopy(inv, 0, inventory, 0, Math.min(invSpace, inv.length));
@@ -47,8 +48,11 @@ public class EntityPlayer extends Entity {
 		}
 		cooldown = (byte) ((data >>> 11) & 0xff);
 	}
-	public void serialize(DataOutputStream dataOut) throws Exception {//TODO Include face value
+	public void serialize(DataOutputStream dataOut, boolean usemap) throws Exception {//TODO Include face value
+		System.out.println("ENT PLAYER SERIALIZE");
+		dataOut.writeShort(ftype);
 		dataOut.write(type);
+		System.out.println(inventory.length);
 		dataOut.writeInt(inventory.length);
 		for (Item I : inventory) {
 			if (I == null) {
@@ -64,7 +68,11 @@ public class EntityPlayer extends Entity {
 		dataOut.writeLong((((long) cooldown) << 11) ^ (((long) color) << 6));
 		dataOut.writeShort(health);
 	}
+	public void serialize(DataOutputStream dataOut) throws Exception {
+		serialize(dataOut, false);
+	}
 	public static EntityPlayer fromDataStream(DataInputStream readFrom) throws Exception {
+		System.out.println("EP FRMDTSTRM");
 		// readFrom.read();
 		Item[] inv = new Item[readFrom.readInt()];
 		System.out.println(inv.length);
@@ -85,9 +93,13 @@ public class EntityPlayer extends Entity {
 		return false;
 	}
 	void onMove() throws Exception {
-		//
+		// System.out.println("MOVED");
 	}
 	public synchronized void schedule(int opcode, short params) {
+		if (nxtframe == opcode) {
+			nxtfparams |= params;
+			return;
+		}
 		nxtframe = opcode;
 		nxtfparams = params;
 	}
@@ -100,15 +112,23 @@ public class EntityPlayer extends Entity {
 			return;
 		}
 		if (nxtframe == 1) {
-			int mX = 1;
-			int mY = 1;
+			// System.out.println(nxtfparams);
+			int tX = 0;
+			int tY = 0;
 			if ((nxtfparams & 0b1) != 0) {
-				mX = -1;
+				tX += 1;
 			}
 			if ((nxtfparams & 0b10) != 0) {
-				mY = -1;
+				tY += 1;
 			}
-			moveBy(mX, mY, 0);
+			if ((nxtfparams & 0b100) != 0) {
+				tX -= 1;
+			}
+			if ((nxtfparams & 0b1000) != 0) {
+				tY -= 1;
+			}
+			moveBy(tX, tY, 0);
+			nxtframe = 0;
 		}
 		// if (((data & 8) == 8) || ((data & 2) == 2)) {
 		// 	int mX = 0;

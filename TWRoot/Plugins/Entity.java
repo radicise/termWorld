@@ -1,22 +1,29 @@
 package TWRoot.Plugins;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InvalidObjectException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
+import TWRoot.TWCommon.Globals;
+
 public abstract class Entity extends SpaceFiller {
-	public final short ftype = 0;
 	public short health;
 	public volatile long data;
 	public byte type = 0;
 	public byte color;
 	protected int xO;
 	protected int yO;
+	private int mX;
+	private int mY;
 	public Item[] inventory;
 	static final int invSpace = 0;
 	protected Entity() {
 	}
 	Entity(int x, int y, long data, short health) {
+		ftype = 0;
 		inventory = new Item[invSpace];
 		face = '\u203c';
 		this.x = x;
@@ -30,14 +37,37 @@ public abstract class Entity extends SpaceFiller {
 	public static void getConfigProps() throws Exception {
 		throw new Exception("NOT IMPLEMENTED");
 	}
-	public void serialize(DataOutputStream dataOut, boolean useMap) throws Exception {//TODO Include face value
-		// System.out.println("type " + type);
+	private void _backup_serialize(DataOutputStream dataOut, boolean useMap) throws Exception {//TODO Include face value
+		System.out.println("GENERIC SERIALIZE");
+		System.out.println("type " + type);
+		System.exit(45);
 		dataOut.writeInt(ftype);
 		dataOut.write(useMap ? PluginMaster.rentmap[type] : type);
 		dataOut.writeInt(x);
 		dataOut.writeInt(y);
 		dataOut.writeLong(data);
 		dataOut.writeShort(health);
+	}
+	public void serialize(DataOutputStream strm, boolean usemap) throws Exception {
+		System.out.println("ATTEMPT SPECIFIC SERIALIZATION");
+		// if (type == 2) {
+		// 	((EntityPlayer) this).serialize(strm, usemap);
+		// 	return;
+		// }
+		try {
+			PluginMaster.contributed[(int) type].getDeclaredMethod("serialize", new Class[]{DataOutputStream.class, boolean.class}).invoke(this, new Object[]{strm, usemap});
+		} catch (NoSuchMethodException E) {
+			if (Globals.debugLevel > 1) {
+				// FileOutputStream fo = new FileOutputStream(new File("LOG.txt"));
+				// fo.write(E.getMessage().getBytes(StandardCharsets.UTF_8));
+				// fo.close();
+				System.out.println(E.getMessage());
+				E.printStackTrace();
+				System.exit(4500);
+				throw new Exception("BREAK POINT");
+			}
+			_backup_serialize(strm, usemap);
+		}
 	}
 	public void serialize(DataOutputStream strm) throws Exception {
 		serialize(strm, false);
@@ -47,8 +77,13 @@ public abstract class Entity extends SpaceFiller {
 	}
 	public static Entity deserialize(DataInputStream strm, boolean useMap) throws Exception {
 		int etype = strm.read();
+		System.out.println("ENT ETYPE: " + etype);
 		if (useMap) {
 			etype = PluginMaster.entmap[etype];
+			System.out.println("ETYPE MAPPED TO: " + etype);
+		}
+		if (etype == 0) {
+			System.out.println(Arrays.toString(strm.readNBytes(strm.available())));
 		}
 		// System.out.println("type " + etype);
 		switch (etype) {
@@ -119,8 +154,10 @@ public abstract class Entity extends SpaceFiller {
 	void onMove() throws Exception {}
 	public boolean moveBy(int Dx, int Dy, int d) throws Exception {
 		if (_moveBy(Dx, Dy, d)) {
+			x = mX;
+			y = mY;
 			if (d == 0) {
-				PluginMaster.level.addMove(PluginMaster.level.terrain.width * y + x, Dx, Dy);
+				PluginMaster.level.addMove(PluginMaster.level.terrain.width * (y-Dy) + (x-Dx), Dx, Dy);
 			}
 			onMove();
 			return true;
@@ -129,16 +166,16 @@ public abstract class Entity extends SpaceFiller {
 	}
 	private boolean _moveBy(int Dx, int Dy, int d) throws Exception {//Only use when Server.buf is safe to write to, don't move by anything that would move the player out of the bounds of int values if not corrected
 		if (d > 15) {
+			// System.out.println("FAILED: RECURSION DEPTH LIMIT EXCEEDED (" + d + ")");
 			return false;
 		}
 		if ((d > 0) && (health > -30000)) {
 			health--;
 		}
 		if ((Dx == 0) && (Dy == 0)) {
+			// System.out.println("FAILED: Dx & Dy = 0");
 			return false;
 		}
-		int mX;
-		int mY;
 		if ((Dx < 0) && (x < (-Dx))) {
 			mX = 0;
 		}
@@ -158,12 +195,16 @@ public abstract class Entity extends SpaceFiller {
 			mY = y + Dy;
 		}
 		if ((mX == x) && (mY == y)) {
+			// System.out.println("FAILED: mX & mY = x & x");
 			return false;
 		}
 		int targetidx = PluginMaster.level.terrain.width * mY + mX;
 		int cidx = PluginMaster.level.terrain.width * y + x;
-		if (PluginMaster.level.terrain.spaces[targetidx].ftype == 1) {
-			if (PluginMaster.tileSolidity[PluginMaster.level.terrain.spaces[targetidx].type]) {
+		SpaceFiller target = PluginMaster.level.terrain.spaces[targetidx];
+		if (target.ftype == 1) {
+			Tile targetT = (Tile) target;
+			if (!targetT.canCover) {
+				// System.out.println("FAILED: TARGET SPACE CANNOT BE COVERED (1," + targetT.type + ")");
 				return false;
 			}
 			SpaceFiller store = covering;
@@ -172,11 +213,11 @@ public abstract class Entity extends SpaceFiller {
 			PluginMaster.level.terrain.spaces[cidx] = store;
 			return true;
 		}
-		if (PluginMaster.level.terrain.spaces[targetidx].ftype == 0) {
-			Entity test = (Entity) PluginMaster.level.terrain.spaces[targetidx];
+		if (target.ftype == 0) {
+			Entity test = (Entity) target;
 			if (test.getClass().equals(EntityItem.class)) {
 				give(((EntityItem) test).item);
-				if (((EntityItem) PluginMaster.level.terrain.spaces[targetidx]).item.quantity == 0) {
+				if (((EntityItem) target).item.quantity == 0) {
 					test.destroy();
 				}
 			}
@@ -195,8 +236,10 @@ public abstract class Entity extends SpaceFiller {
 				// yO = y;
 				// return true;
 			}
+			// System.out.println("FAILED: OTHER ENTITY OBSTRUCTING");
 			return false;
 		}
+		System.out.println("FAILED: UNHANDLED CASE FOR FTYPE (FTYPE not in X where -1 < X < 2) -> (" + target.ftype + ")");
 		return false;
 		// int k = PluginMaster.level.entities.get((((long) x) << 32) ^ ((long) y));
 		// PluginMaster.level.entities.remove((((long) x) << 32) ^ ((long) y));

@@ -32,54 +32,77 @@ public class Client {
 	public static volatile boolean placed;
 	public static volatile boolean destroyed;
 	public static volatile Short cooldown;
+	private static boolean disconnect;
 	static String username;
 	static byte[] unB = new byte[32];
 	static long UID;
 	public static int EID;
 	static DisplayRenderer render;
 	public static LevelRefactored level;
-	static void movementCapture() throws Exception {
-		int n = 0;
+	private static StringBuilder comBuild;
+	private static boolean capturingLine = false;
+	static void lineCapture() throws Exception {
+		comBuild = new StringBuilder();
+		capturingLine = true;
+		while (true) {
+			char c = (char) System.in.read();
+			if (c == '\n') {
+				break;
+			}
+			comBuild.append(c);
+		}
+		String com = comBuild.toString();
+		if (com.matches("^(dc|exit|leave|quit|disconnect)$")) {
+			disconnect = true;
+		}
+		capturingLine = false;
+	}
+	static void inputCapture() throws Exception {
+		char n = '\u0000';
 		while(true) {
-			n = System.in.read();
+			n = (char) System.in.read();
 			switch (n) {
-				case (119):
-				case (87):
+				case ('E'):
+				case ('e'):
+					lineCapture();
+					break;
+				case ('W'):
+				case ('w'):
 					if ((!down) && (!up)) {
 						up = true;
 						System.out.print('\u2191');
-						out.write(130);
+						// out.write(130);
 					}
 					break;
-				case (115):
-				case (83):
+				case ('S'):
+				case ('s'):
 					if ((!up) && (!down)) {
 						down = true;
 						System.out.print('\u2193');
-						out.write(131);
+						// out.write(131);
 					}
 					break;
-				case (97):
-				case (65):
+				case ('A'):
+				case ('a'):
 					if ((!right) && (!left)) {
 						left = true;
 						System.out.print('\u2190');
-						out.write(128);
+						// out.write(128);
 					}
 					break;
-				case (100):
-				case (68):
+				case ('D'):
+				case ('d'):
 					if ((!left) && (!right)) {
 						right = true;
 						System.out.print('\u2192');
-						out.write(129);
+						// out.write(129);
 					}
 					break;
-				case (105):
+				case ('+'):
 					if (!placed) {
 						placed = true;
 						System.out.print('+');
-						out.write(100);
+						// out.write(100);
 						synchronized (cooldown) {
 							if (cooldown == 0) {
 								cooldown = 4;
@@ -87,11 +110,11 @@ public class Client {
 						}
 					}
 					break;
-				case (73):
+				case ('-'):
 					if (!placed) {
 						placed = true;
 						System.out.print('-');
-						out.write(102);
+						// out.write(102);
 						synchronized (cooldown) {
 							if (cooldown == 0) {
 								cooldown = 4;
@@ -99,12 +122,12 @@ public class Client {
 						}
 					}
 					break;
-				case (111):
-				case (79):
+				case ('O'):
+				case ('o'):
 					if (!destroyed) {
 						destroyed = true;
 						System.out.print('*');
-						out.write(101);
+						// out.write(101);
 						synchronized (cooldown) {
 							if (cooldown == 0) {
 								cooldown = 7;
@@ -116,6 +139,8 @@ public class Client {
 		}
 	}
 	public static void main(String[] arg) throws Exception {
+		PluginMaster.init(1);
+		System.out.println(Globals.debugLevel);
 		System.out.println("termWorld v" + Globals.versionString);
 		String[] ipD = arg[3].split(":");
 		int serverPort = Integer.parseInt(ipD[1]);
@@ -136,6 +161,9 @@ public class Client {
 		}
 		catch (Exception E) {
 			System.out.println("Could not connect to server due to an Exception having occurred: " + E);
+			if (Globals.debugLevel > 0) {
+				E.printStackTrace();
+			}
 			System.exit(7);
 		}
 		in = socket.getInputStream();
@@ -166,6 +194,9 @@ public class Client {
 			}
 			catch (Exception E) {
 				System.out.println("Could not connect to authentication server due to an Exception having occurred: " + E);
+				if (Globals.debugLevel > 0) {
+					E.printStackTrace();
+				}
 				socket.close();
 				System.exit(8);
 			}
@@ -274,7 +305,7 @@ public class Client {
 			new Thread() {
 				public void run() {
 					try {
-						movementCapture();
+						inputCapture();
 					}
 					catch (Exception E) {
 						System.out.println("An Exception has occurred: " + E);
@@ -294,9 +325,9 @@ public class Client {
 			// throw new BreakPointException("AFTER LEVEL PRINT");
 			// }
 			// level = Level.deserialize(dIn);
-			PluginMaster.init(1);
 			PluginMaster.loadIdMap(dIn);
 			level = LevelRefactored.deserialize(dIn, true);
+			System.out.println(Arrays.toString(level.terrain.spaces));
 			PluginMaster.level = level;
 			byte b;
 			int i;
@@ -314,6 +345,12 @@ public class Client {
 						System.out.println("Disconnected with reason: " + new String(mB, "UTF-8"));
 						System.exit(8);
 					}
+					if (b == (byte) 0x43) {
+						level.update(dIn);
+					}
+				}
+				if (disconnect) {
+					out.write(0x03);
 				}
 				synchronized (cooldown) {
 					if (cooldown > 0) {
@@ -325,46 +362,65 @@ public class Client {
 					Thread.sleep(100);
 				}
 				Text.buffered.write('[');
-				Text.buffered.write(level.terrain.spaces[EID].covering.face);
+				Text.buffered.write('*');
+				// Text.buffered.write(level.terrain.spaces[EID].covering.face);
 				Text.buffered.write(']');
 				Text.buffered.write('<');
 				Text.buffered.write(Short.toString(cooldown));
 				Text.buffered.write('>');
 				Text.buffered.write('{');
-				Entity ent = (Entity) level.terrain.spaces[EID];
-				for (int p = 0; p < (ent.inventory.length - 1); p++) {
-					if (ent.inventory[p] == null) {
-						Text.buffered.write(' ');
+				// Entity ent = (Entity) level.terrain.spaces[EID];
+				// for (int p = 0; p < (ent.inventory.length - 1); p++) {
+				// 	if (ent.inventory[p] == null) {
+				// 		Text.buffered.write(' ');
+				// 	}
+				// 	else {
+				// 		Text.buffered.write(ent.inventory[p].thing.face);
+				// 		Text.buffered.write('x');
+				// 		Text.buffered.write(Integer.toString(ent.inventory[p].quantity));
+				// 	}
+				// 	Text.buffered.write(',');
+				// }
+				// if (ent.inventory[ent.inventory.length - 1] == null) {
+				// 	Text.buffered.write(' ');
+				// }
+				// else {
+				// 	Text.buffered.write(ent.inventory[ent.inventory.length - 1].thing.face);
+				// 	Text.buffered.write('x');
+				// 	Text.buffered.write(Integer.toString(ent.inventory[ent.inventory.length - 1].quantity));
+				// }
+				// Text.buffered.write('}');
+				// Text.buffered.write('(');
+				// Text.buffered.write(Integer.toString(ent.x));
+				// Text.buffered.write(',');
+				// Text.buffered.write(' ');
+				// Text.buffered.write(Integer.toString(ent.y));
+				// Text.buffered.write(')');
+				level.display();
+				Text.buffered.newLine();
+				Text.buffered.newLine();
+				if (up || down || left || right) {
+					out.write(1);
+					out.write(0 | (right ? 1 : 0) | (left ? 4 : 0) | (up ? 8 : 0) | (down ? 2 : 0));
+				} else if (destroyed || placed) {
+					out.write(2);
+					if (destroyed) {
+						out.write(0);
+						out.write(1);
+					} else {
+						out.write(0);
+						out.write(2);
 					}
-					else {
-						Text.buffered.write(ent.inventory[p].thing.face);
-						Text.buffered.write('x');
-						Text.buffered.write(Integer.toString(ent.inventory[p].quantity));
-					}
-					Text.buffered.write(',');
 				}
-				if (ent.inventory[ent.inventory.length - 1] == null) {
-					Text.buffered.write(' ');
-				}
-				else {
-					Text.buffered.write(ent.inventory[ent.inventory.length - 1].thing.face);
-					Text.buffered.write('x');
-					Text.buffered.write(Integer.toString(ent.inventory[ent.inventory.length - 1].quantity));
-				}
-				Text.buffered.write('}');
-				Text.buffered.write('(');
-				Text.buffered.write(Integer.toString(ent.x));
-				Text.buffered.write(',');
-				Text.buffered.write(' ');
-				Text.buffered.write(Integer.toString(ent.y));
-				Text.buffered.write(')');
-				// level.display();
 				up = false;
 				left = false;
 				down = false;
 				right = false;
 				placed = false;
 				destroyed = false;
+				if (capturingLine) {
+					Text.buffered.write(comBuild.toString());
+				}
 				Text.buffered.flush();
 			}
 		}

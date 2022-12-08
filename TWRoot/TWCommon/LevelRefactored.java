@@ -4,6 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.util.HashMap;
 
+import TWRoot.Plugins.Entity;
 import TWRoot.Plugins.EntityPlayer;
 import TWRoot.Plugins.TileEmpty;
 
@@ -27,6 +28,30 @@ public class LevelRefactored {
 		this.VID = VID;
 		playerMap = new HashMap<byte[], EntityPlayer>();
 	}
+    public void update(DataInputStream strm) throws Exception {
+        int controlcode;
+        while ((controlcode = strm.readByte()) != 0x54) {
+            switch (controlcode) {
+                case (0):
+                    terrain.spaces[strm.readInt()].destroy();
+                    break;
+                case (1):
+                    ((Entity) terrain.spaces[strm.readInt()]).moveBy(strm.readInt(), strm.readInt(), 0);
+                    break;
+                case (2):
+                    terrain.spaces[strm.readInt()].face = strm.readChar();
+                    break;
+            }
+        }
+    }
+    public void animate() throws Exception {
+        globalOut.writeByte(0x43);
+        terrain.animate();
+        globalOut.writeByte(0x54);
+    }
+    public void display() throws Exception {
+        terrain.display();
+    }
     public void addDestruction(int x, int y) throws Exception {
         if (LevelRefactored.noUpdates) {
             return;
@@ -39,6 +64,7 @@ public class LevelRefactored {
             return;
         }
         globalOut.writeByte(0x01);
+        globalOut.writeInt(sfid);
         globalOut.writeInt(Dx);
         globalOut.writeInt(Dy);
     }
@@ -47,6 +73,7 @@ public class LevelRefactored {
             return;
         }
         globalOut.writeByte(0x02);
+        globalOut.writeInt(sfid);
         globalOut.writeChar(face);
     }
     public void zip(DataOutputStream strm) throws Exception {

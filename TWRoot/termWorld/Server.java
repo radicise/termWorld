@@ -110,7 +110,7 @@ public class Server {
 				System.out.println("LEVEL NOT STORED");
 			}
 			if (saved) {
-				level = LevelRefactored.generate(40, 40, 3827L);
+				level = LevelRefactored.generate(2, 2, 3827L); // 40 x 40 original
 			}
 		}
 		catch (Exception E) {
@@ -140,7 +140,7 @@ public class Server {
 				if (Locker.tryLock()) {
 					try {
 						int n = 0;
-						level.terrain.animate();
+						level.animate();
 						ConnectedPlayer CoPl;
 						synchronized (players) {
 							buf.put((byte) 2);
@@ -149,7 +149,9 @@ public class Server {
 							while (n < i) {
 					    		CoPl = players.get(n);
 					    		try {
+									CoPl.out.write(0x43);
 					    			CoPl.out.write(bufBytes, 0, pos);//TODO Prevent lag due to blocking writes
+									CoPl.out.write(0x54);
 					    			CoPl.out.flush();
 					    		}
 					    		catch (Exception E) {

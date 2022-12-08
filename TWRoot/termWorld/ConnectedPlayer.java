@@ -31,6 +31,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	// public int EID;
 	public long SUID;
 	public volatile boolean alive = true;
+	public volatile boolean joined = false;
 	public int clientVersion;
 	private static boolean genInit = false;
 	private int h;
@@ -288,6 +289,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		}
 		int spawnloc = spawnY*Server.level.terrain.width+spawnX;
 		if (!Server.level.terrain.spaces[spawnloc].canCover) {
+			System.out.println(Server.level.terrain.spaces[spawnloc].canCover);
 			out.write(0x55);
 			dOut.writeInt(28);
 			out.write("Spawn blocked!".getBytes(StandardCharsets.UTF_16BE));
@@ -299,7 +301,10 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		out.write(0x63);
 		Server.Locker.lock();
 		SpaceFiller storedspot = Server.level.terrain.spaces[spawnloc];
-		Server.level.terrain.spaces[spawnloc] = new EntityPlayer(playerID, Server.level.spawnX, Server.level.spawnY, (System.currentTimeMillis() << 6) & 0x380, (short) 10);
+		Server.level.terrain.spaces[spawnloc] = hasID ? playerent : new EntityPlayer(playerID, Server.level.spawnX, Server.level.spawnY, (System.currentTimeMillis() << 6) & 0x380, (short) 10);
+		if (!hasID) {
+			playerent = (EntityPlayer) Server.level.terrain.spaces[spawnloc];
+		}
 		Server.level.terrain.spaces[spawnloc].covering = storedspot;
 		if (!hasID) {
 			Server.level.playerMap.put(playerID, (EntityPlayer) Server.level.terrain.spaces[spawnloc]);
@@ -311,6 +316,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		// dOut.writeInt(Server.level.ent[EID].x);//TODO Prevent lag due to blocking writes
 		// dOut.writeInt(Server.level.ent[EID].y);//TODO Prevent lag due to blocking writes
 		Server.players.add(this);
+		joined = true;
 		Server.Locker.unlock();
 		int n;
 		try {
@@ -322,6 +328,10 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 				} else if (n == 0x02) { // handle terrain changing
 					n = in.read();
 					playerent.schedule(2, (short) ((n << 8) | in.read()));
+				} else if (n == 0x03) { // handle disconnection
+					kick("Manual Disconnection");
+				} else if (n == 0x04) { // handle command
+					//TODO
 				}
 				// synchronized (Server.level.ent[EID]) {
 				// 	if ((n & 128) == 128) {
@@ -345,24 +355,36 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			}
 		}
 		catch (Exception E) {
-			if (alive) {
+			E.printStackTrace();
+			if (alive && !(E instanceof java.net.SocketException)) {
 				kick("Serverside Exception: " + E);
+			} else {
+				alive = false;
+				if (joined) {
+					remSelf();
+				}
 			}
 		}
 		return;
+	}
+	void remSelf() throws Exception {
+		Server.level.addDestruction(playerent.x, playerent.y);
+		Server.level.terrain.spaces[playerent.x+Server.level.terrain.width*playerent.y].destroy();
+		synchronized(Server.players) {
+			Server.players.remove(this);
+		}
+		Thread.sleep(500);
 	}
 	void kick(String message) throws Exception {
 		kick(message, false);
 	}
 	void kick(String message, boolean suppress) throws Exception {
-		if (!suppress) {
-			alive = false;
-			Server.level.addDestruction(playerent.x, playerent.y);
-			Server.level.terrain.spaces[playerent.x+Server.level.terrain.width*playerent.y].destroy();
-			synchronized(Server.players) {
-				Server.players.remove(this);
-			}
-			Thread.sleep(500);
+		if (!alive) {
+			return;
+		}
+		alive = false;
+		if (!suppress && joined) {
+			remSelf();
 		}
 		try {
 			out.write(3);

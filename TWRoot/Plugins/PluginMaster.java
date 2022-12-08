@@ -6,9 +6,11 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -51,43 +53,77 @@ public class PluginMaster {
     public static void sendIdMap(DataOutputStream strm) throws Exception {
         strm.writeInt(contributed.length);
         for (int i = 0; i < contributed.length; i ++) {
-            String n = contributed[i].getSimpleName();
-            strm.writeInt(n.length());
-            strm.writeChars(n);
+            // if (contributed[i] == null) {
+            //     strm.writeInt(0);
+            //     strm.writeInt(i);
+            //     continue;
+            // }
+            String name = contributed[i].getSimpleName();
+            System.out.println(name);
+            byte[] n = name.getBytes(StandardCharsets.UTF_8);
+            System.out.println(n.length + " " + Arrays.toString(n));
+            strm.writeInt(n.length);
+            strm.write(n);
             strm.writeInt(i);
         }
+        // System.out.println(Arrays.toString(contiles));
         strm.writeInt(contiles.length);
         for (int i = 0; i < contiles.length; i ++) {
-            String n = contiles[i].getSimpleName();
-            strm.writeInt(n.length());
-            strm.writeChars(n);
+            byte[] n = contiles[i].getSimpleName().getBytes(StandardCharsets.UTF_8);
+            strm.writeInt(n.length);
+            strm.write(n);
             strm.writeInt(i);
         }
     }
 
     public static void loadIdMap(DataInputStream strm) throws Exception {
         entmap = new int[strm.readInt()];
+        rentmap = new int[entmap.length];
         int id; // avoid allocating memory during loop by defining "id" outisde of loops and setting it within loops
-        for (int i = 0; i < entmap.length; i ++) {
+        // int len;
+        for (int _loop = 0; _loop < entmap.length; _loop ++) {
+            // len = strm.readInt();
+            // String name = len > 0 ? new String(strm.readNBytes(len)) : "null";
+            // id = getClassIdByString(name, true);
+            // System.out.println(name + " " + id + " " + len);
             id = getClassIdByString(new String(strm.readNBytes(strm.readInt())), true);
+            int i = strm.readInt();
             entmap[i] = id;
             rentmap[id] = i;
         }
+        System.out.println("PAST ENT MAP");
         tilemap = new int[strm.readInt()];
-        for (int i = 0; i < tilemap.length; i ++) {
+        rtilemap = new int[tilemap.length];
+        for (int _loop = 0; _loop < tilemap.length; _loop ++) {
             id = getClassIdByString(new String(strm.readNBytes(strm.readInt())), false);
+            int i = strm.readInt();
             tilemap[i] = id;
             tilemap[id] = i;
         }
+        System.out.println(Arrays.toString(entmap));
+        System.out.println(Arrays.toString(rentmap));
+        System.out.println(Arrays.toString(tilemap));
+        System.out.println(Arrays.toString(rtilemap));
     }
 
     private static int getClassIdByStringSlowSearch(String name, boolean isEntity) {
+        // System.out.println(name);
         Class<? extends SpaceFiller>[] test = isEntity ? contributed : contiles;
         for (int i = 0; i < test.length; i ++) {
-            if (test[i].getSimpleName().equals(name)) {
+            // if (test[i] == null) {
+            //     if (name.equals("null")) {
+            //         return i;
+            //     }
+            //     continue;
+            // }
+            String n = test[i].getSimpleName();
+            // System.out.println(n + " " + name + " " + n.length() + " " + name.length());
+            if (n.equals(name)) {
+                // System.out.println("FOUND MATCH");
                 return i;
             }
         }
+        System.out.println(Arrays.toString(test));
         return -1;
     }
 
@@ -215,7 +251,7 @@ public class PluginMaster {
         lst.add(Entity.class);
         lst.add(EntityItem.class);
         lst.add(EntityPlayer.class);
-        lst.add(null);
+        // lst.add(null);
         for (Class<? extends Plugin> p : commonPlugs) {
             // System.out.println(p.getSimpleName());
             Class<? extends SpaceFiller>[] x = (Class<? extends SpaceFiller>[]) p.getField("contributes").get(null);
@@ -225,8 +261,13 @@ public class PluginMaster {
                 }
             }
         }
+        // gets contributed tiles
+        ArrayList<Class<? extends SpaceFiller>> tlst = new ArrayList<>(2);
+        tlst.add(Tile.class);
+        tlst.add(TileEmpty.class);
         // contributed = (Class<? extends Entity>[]) lst.toArray();
         contributed = lst.toArray(new Class[lst.size()]);
+        contiles = tlst.toArray(new Class[tlst.size()]);
         int uplugc = party == 0 ? serverPlugs.size() : clientPlugs.size();
         //TODO: remove debug info once done / add proper display for loaded plugins
         System.out.println(String.format("%d plugins loaded, %d %s, %d common", commonPlugs.size()+uplugc, uplugc, party == 0 ? "Server Side" : "Client Side", commonPlugs.size()));

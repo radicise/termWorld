@@ -3,10 +3,10 @@ package TWRoot.Plugins;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 
-public abstract class Tile extends SpaceFiller {
-    public final short ftype = 1;
+public class Tile extends SpaceFiller {
 
     public Tile(char face, byte type, int x, int y, boolean canCover, SpaceFiller child) {
+        ftype = 1;
         this.face = face;
         this.type = type;
         this.x = x;
@@ -40,7 +40,11 @@ public abstract class Tile extends SpaceFiller {
         boolean canCover = strm.readBoolean();
         SpaceFiller child = deserializeChild(strm);
         Class<? extends SpaceFiller> cls = PluginMaster.contiles[type];
-        return (Tile) cls.getConstructor(new Class[]{char.class, byte.class, int.class, int.class, boolean.class, SpaceFiller.class}).newInstance(face, (byte) type, x, y, canCover, child);
+        try {
+            return (Tile) cls.getConstructor(new Class[]{char.class, byte.class, int.class, int.class, boolean.class, SpaceFiller.class}).newInstance(face, (byte) type, x, y, canCover, child);
+        } catch (NoSuchMethodException _E) {
+            return new Tile(face, (byte) type, x, y, canCover, child);
+        }
     }
 
     public static Tile deserialize(DataInputStream strm) throws Exception {

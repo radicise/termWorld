@@ -2,12 +2,13 @@ package TWRoot.Plugins;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.util.Arrays;
 
 public abstract class SpaceFiller {
     public int x;
 	public int y;
 	public char face;
-    public final short ftype = -1;
+    public short ftype;
     public byte type = 0;
     public boolean canCover = false;
     public SpaceFiller covering = null;
@@ -62,13 +63,15 @@ public abstract class SpaceFiller {
 
     public static SpaceFiller deserialize(DataInputStream strm, boolean useMap) throws Exception {
         int tftype = strm.readShort();
+        System.out.println(tftype);
         switch (tftype) {
             case 0:
                 return Entity.deserialize(strm, useMap);
             case 1:
                 return Tile.deserialize(strm, useMap);
             default:
-                throw new Exception("BAD TYPE");
+                System.out.println(Arrays.toString(strm.readNBytes(strm.available())));
+                throw new Exception("BAD TYPE: " + tftype);
         }
     }
 

@@ -1,6 +1,7 @@
 package TWRoot.Plugins;
 
 public class TileEmpty extends Tile {
+    public short ftype = 1;
     public static char dface = ' ';
 
     public TileEmpty(byte type, int x, int y, SpaceFiller child) {
