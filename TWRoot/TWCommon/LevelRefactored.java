@@ -2,10 +2,13 @@ package TWRoot.TWCommon;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.security.SecureRandom;
 import java.util.HashMap;
 
 import TWRoot.Plugins.Entity;
 import TWRoot.Plugins.EntityPlayer;
+import TWRoot.Plugins.PluginMaster;
+import TWRoot.Plugins.SpaceFiller;
 import TWRoot.Plugins.TileEmpty;
 
 public class LevelRefactored {
@@ -32,14 +35,25 @@ public class LevelRefactored {
         int controlcode;
         while ((controlcode = strm.readByte()) != 0x54) {
             switch (controlcode) {
-                case (0):
+                case (0): // destruction
                     terrain.spaces[strm.readInt()].destroy();
                     break;
-                case (1):
+                case (1): // movement
                     ((Entity) terrain.spaces[strm.readInt()]).moveBy(strm.readInt(), strm.readInt(), 0);
                     break;
-                case (2):
+                case (2): // face change
                     terrain.spaces[strm.readInt()].face = strm.readChar();
+                    break;
+                case (3): // set space
+                    SpaceFiller child = null;
+                    boolean replace = strm.readBoolean();
+                    int i = strm.readInt() + terrain.height * strm.readInt();
+                    if (!replace) {
+                        child = terrain.spaces[i];
+                    }
+                    SpaceFiller obj = SpaceFiller.deserialize(strm);
+                    obj.covering = child;
+                    terrain.spaces[i] = obj;
                     break;
             }
         }
@@ -51,6 +65,16 @@ public class LevelRefactored {
     }
     public void display() throws Exception {
         terrain.display();
+    }
+    public <T extends SpaceFiller> void addSpaceSet(int x, int y, boolean isFullReplace, T obj) throws Exception {
+        if (LevelRefactored.noUpdates) {
+            return;
+        }
+        globalOut.writeByte(0x03);
+        globalOut.writeBoolean(isFullReplace);
+        globalOut.writeInt(x);
+        globalOut.writeInt(y);
+        obj.serialize(globalOut);
     }
     public void addDestruction(int x, int y) throws Exception {
         if (LevelRefactored.noUpdates) {
@@ -116,12 +140,18 @@ public class LevelRefactored {
     }
     public static LevelRefactored generate(int width, int height, long seed) throws Exception {
         FixedFrame terrain = new FixedFrame(width, height);
+        SecureRandom sr = new SecureRandom(new byte[]{(byte) (seed), (byte) (seed >> 8), (byte) (seed >> 16), (byte) (seed >> 24), (byte) (seed >> 32), (byte) (seed >> 40), (byte) (seed >> 48), (byte) (seed >> 56)});
         for (int i = 0; i < terrain.height; i ++) {
             for (int j = 0; j < terrain.width; j ++) {
-                terrain.spaces[i*terrain.width+j] = new TileEmpty(1, j, i, null);
+                int ty = sr.nextInt(PluginMaster.contiles.length-1)+1;
+                terrain.spaces[i*terrain.width+j] = PluginMaster.contiles[ty].getConstructor(new Class[]{int.class, int.class, int.class, SpaceFiller.class}).newInstance(new Object[]{ty, j, i, null});
+                // terrain.spaces[i*terrain.width+j] = new TileEmpty(1, j, i, null);
             }
         }
-        return new LevelRefactored(terrain, 0L, 0, 1, 1);
+        int spawnX = 1;
+        int spawnY = 1;
+        terrain.spaces[spawnY*width+spawnX] = new TileEmpty(1, spawnX, spawnY, null);
+        return new LevelRefactored(terrain, 0L, 0, spawnX, spawnY);
     }
     public String debugRender() {
         StringBuilder sb = new StringBuilder(terrain.spaces.length+terrain.height);

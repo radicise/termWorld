@@ -16,6 +16,7 @@ public class Loader extends Plugin {
      * {}
      */
     public static Class<? extends SpaceFiller>[] contributes = new Class[]{Dog.class, Explosive.class};
+    public static Class<? extends SpaceFiller>[] contiles = new Class[]{TileWall.class};
     public static void main(String[] args) throws Exception {
         FileInputStream fIn = new FileInputStream(new File("TWRoot/Plugins/Std/config.txt"));
         String[] lines = new String(fIn.readAllBytes()).split("\n");

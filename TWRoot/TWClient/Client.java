@@ -7,9 +7,11 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Arrays;
 
 import TWRoot.Plugins.Entity;
+import TWRoot.Plugins.EntityPlayer;
 import TWRoot.Plugins.Item;
 import TWRoot.Plugins.PluginMaster;
 import TWRoot.TWCommon.Globals;
@@ -22,7 +24,7 @@ public class Client {
 	public static final int defaultAuthPort = 15652;
 	public static int authPort = defaultAuthPort;
 	public static int serverVersion;
-	static OutputStream out;//TODO Change to BufferedOutputStream (even in declaration) and add flush() calls when chat or other features which need buffering are added
+	static DataOutputStream out;//TODO Change to BufferedOutputStream (even in declaration) and add flush() calls when chat or other features which need buffering are added
 	static InputStream in;
 	static int turnInterval;
 	public static volatile boolean up;
@@ -36,12 +38,14 @@ public class Client {
 	static String username;
 	static byte[] unB = new byte[32];
 	static long UID;
-	public static int EID;
+	// public static int EID;
+	public static EntityPlayer playere;
 	static DisplayRenderer render;
 	public static LevelRefactored level;
 	private static StringBuilder comBuild;
 	private static boolean capturingLine = false;
-	static void lineCapture() throws Exception {
+	private static ArrayList<Msg> usrmsg = new ArrayList<>();
+	static void getLine() throws Exception {
 		comBuild = new StringBuilder();
 		capturingLine = true;
 		while (true) {
@@ -49,18 +53,95 @@ public class Client {
 			if (c == '\n') {
 				break;
 			}
-			comBuild.append(c);
-		}
-		String com = comBuild.toString();
-		if (com.matches("^(dc|exit|leave|quit|disconnect)$")) {
-			disconnect = true;
+			if (c == 127) { // delete / backspace key
+				comBuild.deleteCharAt(comBuild.length()-1);
+			} else {
+				comBuild.append(c);
+			}
 		}
 		capturingLine = false;
 	}
+	static void lineCapture() throws Exception {
+		getLine();
+		String com = comBuild.toString();
+		if (com.matches("^(dc|exit|leave|quit|disconnect)$")) {
+			disconnect = true;
+		} else if (com.matches("^(clr|clear|rem|rm) (tmp|all) (msg|msgs)$")) {
+			if (com.contains("tmp")) {
+				for (int i = usrmsg.size() - 1; i >= 0; i --) {
+					Msg m = usrmsg.get(i);
+					if (m.decayTimeFrames < 0) {
+						usrmsg.remove(i);
+					}
+				}
+			} else {
+				usrmsg.clear();
+			}
+		} else if (com.matches("^(op|gop|getop|auth): .*$")) {
+			String entry = com.split(": ", 2)[1];
+			out.writeByte(0x04);
+			byte[] bytes = entry.getBytes(StandardCharsets.UTF_16BE);
+			out.writeInt(bytes.length);
+			out.write(bytes);
+		} else if (com.matches("^/.*$")) {
+			String[] parts = com.split(" ");
+			/*
+			/SET TYPE SIGNATURE
+			/set (int) (int) (tile|entity) (string|int) (boolean?=false)
+			*/
+			// "/set 1 1 tile 1 true" sets the space at (1, 1) to be tile with id 1 and fully replaces the previous space
+			if (parts[0].equals("/set")) {
+				int tX = Integer.parseInt(parts[1]);
+				int tY = Integer.parseInt(parts[2]);
+				int fT = parts[3].equals("entity") ? 0 : (parts[3].equals("tile") ? 1 : -1);
+				if (fT == -1) {
+					usrmsg.add(new Msg("FT = -1 (" + parts[3] + ")", -1));
+					return;
+				}
+				int csid = parts[4].matches("^[\\d]+$") ? Integer.parseInt(parts[4]) : PluginMaster.getClassIdByString(parts[4], fT == 0);
+				int[] tMap = (fT == 0 ? PluginMaster.rentmap : PluginMaster.rtilemap);
+				if (csid >= tMap.length || csid < 0) {
+					usrmsg.add(new Msg("INVALID CSID: " + csid, -1));
+					return;
+				}
+				int nId = tMap[csid];
+				boolean fRep = parts.length > 5 ? parts[5].equals("true") : false;
+				out.writeByte(0x05);
+				out.writeInt(16);
+				out.writeByte(0x00);
+				out.writeInt(tX);
+				out.writeInt(tY);
+				out.writeShort(fT);
+				out.writeInt(nId);
+				out.writeBoolean(fRep);
+				usrmsg.add(new Msg("COMMAND SENT", 7));
+			} else {
+				usrmsg.add(new Msg("unrecognized command", 10));
+			}
+		}
+	}
 	static void inputCapture() throws Exception {
-		char n = '\u0000';
+		char n = '\u001b';
 		while(true) {
 			n = (char) System.in.read();
+			if (n == '\u001b' && System.in.available() > 0) {
+				System.in.mark(2);
+				if (System.in.read() == '[') {
+					n = (char) System.in.read();
+					if (n == 'A') {
+						n = 'W';
+					} else if (n == 'B') {
+						n = 'S';
+					} else if (n == 'C') {
+						n = 'D';
+					} else if (n == 'D') {
+						n = 'A';
+					}
+					System.in.readNBytes(System.in.available());
+				} else {
+					System.in.reset();
+				}
+			}
 			switch (n) {
 				case ('E'):
 				case ('e'):
@@ -168,7 +249,7 @@ public class Client {
 		}
 		in = socket.getInputStream();
 		DataInputStream dIn = new DataInputStream(in);
-		out = socket.getOutputStream();
+		out = new DataOutputStream(socket.getOutputStream());
 		DataOutputStream dOut = new DataOutputStream(out);
 		{
 			/*arg = new String[3];
@@ -333,6 +414,10 @@ public class Client {
 			int i;
 			turnInterval = dIn.readShort();
 			System.out.println("Turn interval: " + turnInterval + "ms");
+			int pX = dIn.readInt();
+			int pY = dIn.readInt();
+			System.out.println(pX + " " + pY);
+			playere = (EntityPlayer) level.terrain.spaces[pX + level.terrain.width * pY];
 			byte[] mB;
 			long id;
 			long oID = dIn.readLong();
@@ -363,39 +448,39 @@ public class Client {
 				}
 				Text.buffered.write('[');
 				Text.buffered.write('*');
-				// Text.buffered.write(level.terrain.spaces[EID].covering.face);
+				Text.buffered.write(playere.covering == null ? ' ' : playere.covering.face);
 				Text.buffered.write(']');
 				Text.buffered.write('<');
 				Text.buffered.write(Short.toString(cooldown));
 				Text.buffered.write('>');
 				Text.buffered.write('{');
 				// Entity ent = (Entity) level.terrain.spaces[EID];
-				// for (int p = 0; p < (ent.inventory.length - 1); p++) {
-				// 	if (ent.inventory[p] == null) {
-				// 		Text.buffered.write(' ');
-				// 	}
-				// 	else {
-				// 		Text.buffered.write(ent.inventory[p].thing.face);
-				// 		Text.buffered.write('x');
-				// 		Text.buffered.write(Integer.toString(ent.inventory[p].quantity));
-				// 	}
-				// 	Text.buffered.write(',');
-				// }
-				// if (ent.inventory[ent.inventory.length - 1] == null) {
-				// 	Text.buffered.write(' ');
-				// }
-				// else {
-				// 	Text.buffered.write(ent.inventory[ent.inventory.length - 1].thing.face);
-				// 	Text.buffered.write('x');
-				// 	Text.buffered.write(Integer.toString(ent.inventory[ent.inventory.length - 1].quantity));
-				// }
-				// Text.buffered.write('}');
-				// Text.buffered.write('(');
-				// Text.buffered.write(Integer.toString(ent.x));
-				// Text.buffered.write(',');
-				// Text.buffered.write(' ');
-				// Text.buffered.write(Integer.toString(ent.y));
-				// Text.buffered.write(')');
+				for (int p = 0; p < (playere.inventory.length - 1); p++) {
+					if (playere.inventory[p] == null) {
+						Text.buffered.write(' ');
+					}
+					else {
+						Text.buffered.write(playere.inventory[p].thing.face);
+						Text.buffered.write('x');
+						Text.buffered.write(Integer.toString(playere.inventory[p].quantity));
+					}
+					Text.buffered.write(',');
+				}
+				if (playere.inventory[playere.inventory.length - 1] == null) {
+					Text.buffered.write(' ');
+				}
+				else {
+					Text.buffered.write(playere.inventory[playere.inventory.length - 1].thing.face);
+					Text.buffered.write('x');
+					Text.buffered.write(Integer.toString(playere.inventory[playere.inventory.length - 1].quantity));
+				}
+				Text.buffered.write('}');
+				Text.buffered.write('(');
+				Text.buffered.write(Integer.toString(playere.x));
+				Text.buffered.write(',');
+				Text.buffered.write(' ');
+				Text.buffered.write(Integer.toString(playere.y));
+				Text.buffered.write(')');
 				level.display();
 				Text.buffered.newLine();
 				Text.buffered.newLine();
@@ -418,6 +503,17 @@ public class Client {
 				right = false;
 				placed = false;
 				destroyed = false;
+				for (int j = usrmsg.size() - 1; j >= 0; j --) {
+					Msg m = usrmsg.get(j);
+					if (m.decayTimeFrames > 0) {
+						m.decayTimeFrames --;
+					} else if (m.decayTimeFrames == 0) {
+						usrmsg.remove(j);
+						continue;
+					}
+					Text.buffered.write(m.msg);
+					Text.buffered.newLine();
+				}
 				if (capturingLine) {
 					Text.buffered.write(comBuild.toString());
 				}

@@ -37,6 +37,7 @@ public class Server {
 	static long GUSID = 1;//Server ID
 	private static Timer intervallic;
 	public static boolean running = true;
+	public static String privPass = "password";
 	public static void stop() {
 		running = false;
 		intervallic.cancel();
@@ -92,7 +93,9 @@ public class Server {
 		fileOut.write(testing.toBytes());
 		fileOut.close();
 		System.exit(0);
-		/**/try {
+		/**/
+		PluginMaster.init(0);
+		try {
 			boolean saved = true;
 			/*level = Level.fromBytes(Files.readAllBytes(FileSystems.getDefault().getPath(levelname)));/**/
 			try {
@@ -110,16 +113,16 @@ public class Server {
 				System.out.println("LEVEL NOT STORED");
 			}
 			if (saved) {
-				level = LevelRefactored.generate(2, 2, 3827L); // 40 x 40 original
+				level = LevelRefactored.generate(10, 10, 3827L); // 40 x 40 original
 			}
 		}
 		catch (Exception E) {
 			System.out.println("An Exception has occurred: " + E);
+			E.printStackTrace();
 			System.exit(1);
 		}
 		LevelRefactored.noUpdates = false;
 		PluginMaster.level = level;
-		PluginMaster.init(0);
 		int n = 0;
 		for (Method M : plugs) {
 			System.out.println("Loading plugin: " + M.toGenericString() + " in " + M.getDeclaringClass().getCanonicalName());

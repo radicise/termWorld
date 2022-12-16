@@ -7,6 +7,7 @@ package TWRoot.Plugins;
 public abstract class Plugin {
     /** {@link SpaceFiller} contributions */
     public static Class<? extends SpaceFiller>[] contributes = new Class[]{};
+    public static Class<? extends SpaceFiller>[] contiles = new Class[]{};
     /**
      * post level gen
      * @param args

@@ -111,7 +111,7 @@ public class EntityPlayer extends Entity {
 		if (nxtframe == 0) {
 			return;
 		}
-		if (nxtframe == 1) {
+		if (nxtframe == 1) { // handle move
 			// System.out.println(nxtfparams);
 			int tX = 0;
 			int tY = 0;
@@ -141,13 +141,16 @@ public class EntityPlayer extends Entity {
 		// 	}
 		// 	moveBy(mX, mY, 0);
 		// }
+		if (nxtframe == 3) { // handle multi building
+			//
+		}
 		if (cooldown > 0) {
 			cooldown--;
 		}
 		final int width = PluginMaster.level.terrain.width;
 		final int height = PluginMaster.level.terrain.height;
 		// final int p = y * width + x;
-		if (cooldown < 1) {
+		if (cooldown < 1) { // handle create / destroy
 			if (nxtframe != 2) {
 				nxtframe = 0;
 				return;

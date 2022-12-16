@@ -252,6 +252,10 @@ public class PluginMaster {
         lst.add(EntityItem.class);
         lst.add(EntityPlayer.class);
         // lst.add(null);
+        // gets contributed tiles
+        ArrayList<Class<? extends SpaceFiller>> tlst = new ArrayList<>(2);
+        tlst.add(Tile.class);
+        tlst.add(TileEmpty.class);
         for (Class<? extends Plugin> p : commonPlugs) {
             // System.out.println(p.getSimpleName());
             Class<? extends SpaceFiller>[] x = (Class<? extends SpaceFiller>[]) p.getField("contributes").get(null);
@@ -260,11 +264,13 @@ public class PluginMaster {
                     lst.add(e);
                 }
             }
+            Class<? extends SpaceFiller>[] y = (Class<? extends SpaceFiller>[]) p.getField("contiles").get(null);
+            for (Class<? extends SpaceFiller> e : y) {
+                if (e != null) {
+                    tlst.add(e);
+                }
+            }
         }
-        // gets contributed tiles
-        ArrayList<Class<? extends SpaceFiller>> tlst = new ArrayList<>(2);
-        tlst.add(Tile.class);
-        tlst.add(TileEmpty.class);
         // contributed = (Class<? extends Entity>[]) lst.toArray();
         contributed = lst.toArray(new Class[lst.size()]);
         contiles = tlst.toArray(new Class[tlst.size()]);

@@ -1,3 +1,5 @@
+// #incude ""
+
 package TWRoot.termWorld;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -17,13 +19,15 @@ import java.util.Arrays;
 import TWRoot.Plugins.EntityPlayer;
 import TWRoot.Plugins.PluginMaster;
 import TWRoot.Plugins.SpaceFiller;
+import TWRoot.TWCommon.FixedFrame;
 import TWRoot.TWCommon.Globals;
+import TWRoot.TWCommon.LevelRefactored;
 import TWRoot.TWCommon.Sec;
 
 import javax.crypto.Cipher;
 class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	BufferedOutputStream out;
-	InputStream in;
+	DataInputStream in;
 	Socket socket;
 	private EntityPlayer playerent;
 	public String username;
@@ -32,6 +36,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	public long SUID;
 	public volatile boolean alive = true;
 	public volatile boolean joined = false;
+	private boolean privilaged = false;
 	public int clientVersion;
 	private static boolean genInit = false;
 	private int h;
@@ -137,7 +142,7 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 	ConnectedPlayer(Socket socket) throws Exception {
 		this.socket = socket;
 		this.out = new BufferedOutputStream(socket.getOutputStream());
-		this.in = socket.getInputStream();
+		this.in = new DataInputStream(socket.getInputStream());
 		h = socket.getInputStream().read();
 		if (!Server.running) {
 			kick("SERVER NOT RUNNING", true);
@@ -313,8 +318,9 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 		PluginMaster.sendIdMap(dOut);
 		Server.level.serialize(dOut);//TODO Use gzip
 		dOut.writeShort(Server.turnInterval);
-		// dOut.writeInt(Server.level.ent[EID].x);//TODO Prevent lag due to blocking writes
-		// dOut.writeInt(Server.level.ent[EID].y);//TODO Prevent lag due to blocking writes
+		System.out.println(playerent.x + " " + playerent.y);
+		dOut.writeInt(playerent.x);//TODO Prevent lag due to blocking writes
+		dOut.writeInt(playerent.y);//TODO Prevent lag due to blocking writes
 		Server.players.add(this);
 		joined = true;
 		Server.Locker.unlock();
@@ -330,8 +336,14 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 					playerent.schedule(2, (short) ((n << 8) | in.read()));
 				} else if (n == 0x03) { // handle disconnection
 					kick("Manual Disconnection");
-				} else if (n == 0x04) { // handle command
-					//TODO
+				} else if (n == 0x04) { // handle priv gain
+					privilaged = new String(in.readNBytes(in.readInt()), StandardCharsets.UTF_16BE).equals(Server.privPass);
+				} else if (n == 0x05) { // handle command
+					if (!privilaged) {
+						in.readNBytes(in.readInt());
+						continue;
+					}
+					handleCommand();
 				}
 				// synchronized (Server.level.ent[EID]) {
 				// 	if ((n & 128) == 128) {
@@ -366,6 +378,31 @@ class ConnectedPlayer implements Runnable, Comparable<ConnectedPlayer> {
 			}
 		}
 		return;
+	}
+	private void handleCommand() throws Exception {
+		int cmid = in.readByte();
+		int length = in.readInt();
+		switch (cmid) {
+			case (0): // handle set command
+				/*
+				/SET TYPE SIGNATURE
+				/set (int) (int) (tile|entity) (string|int) (boolean?=false)
+				*/
+				LevelRefactored lvl = Server.level;
+				FixedFrame frm = lvl.terrain;
+				int tX = in.readInt();
+				int tY = in.readInt();
+				int tIdx = tX + frm.width * tY;
+				boolean typ = in.readInt() == 0;
+				int id = in.readInt();
+				boolean fRep = in.readBoolean();
+				SpaceFiller rep = (typ ? PluginMaster.contributed : PluginMaster.contiles)[id].getConstructor(new Class[]{int.class, int.class, int.class, SpaceFiller.class}).newInstance(new Object[]{id, tX, tY, fRep ? frm.spaces[tIdx] : null});
+				lvl.addSpaceSet(tX, tY, fRep, rep);
+				frm.spaces[tIdx] = rep;
+				break;
+			default:
+				in.readNBytes(length-1);
+		}
 	}
 	void remSelf() throws Exception {
 		Server.level.addDestruction(playerent.x, playerent.y);

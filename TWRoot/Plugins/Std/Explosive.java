@@ -11,7 +11,7 @@ import TWRoot.Plugins.SpaceFiller;
 class Explosive extends Entity {
 	// entity and tile resistances, -1 is unbreakable
 	private static int[] entresist = new int[]{-1, 0, -1, -1};
-	private static int[] tileresist = new int[]{-1, -1};
+	private static int[] tileresist = new int[]{-1, -1, 0};
 	static final int invSpace = 0;
 	int size;
 	boolean healed;
